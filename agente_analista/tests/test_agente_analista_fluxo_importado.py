@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from agente_analista.app import ServicoAnalista, criar_app
-from fixtures_importacao import TEXTO
+from fixtures_importacao import TEXTO, construir_exportacao_selecao
 from test_agente_analista_importacao import construir_exportacao
 
 
@@ -131,7 +131,22 @@ class FluxoImportadoAPITests(unittest.TestCase):
         self.assertEqual(self.servico.chamadas, [])
 
     def test_busca_usa_importacao_e_preserva_vinculo_apos_reinicio(self):
+        self.conferir_ciclo_busca_importada()
+
+    def test_busca_selecao_preserva_vetores_contagens_e_historico(self):
+        for tipos in (["documento", "paragrafo"], ["documento"]):
+            with self.subTest(tipos=tipos):
+                self.exportacao = construir_exportacao_selecao(tipos)
+                self.conferir_ciclo_busca_importada()
+
+    def conferir_ciclo_busca_importada(self):
+        chamadas_antes = len(self.servico.chamadas)
+        tipos = {rep["tipo"] for rep in self.exportacao["representacoes"]}
+        contagens = {tipo: sum(rep["tipo"] == tipo for rep in self.exportacao["representacoes"])
+                    for tipo in tipos}
         importada = self.importar()
+        self.assertEqual(importada["contagens"], contagens)
+        self.assertNotIn("estrategia_consultas", importada["fonte"])
         registrada = self.client.post(
             "/api/relatos", json={"texto": TEXTO, "vetorizacao_id": importada["id"]},
         )
@@ -144,12 +159,12 @@ class FluxoImportadoAPITests(unittest.TestCase):
         self.assertEqual(resposta.get_json()["relato_id"], relato_id)
         tarefa = self.aguardar(busca_id)
         self.assertEqual(tarefa["estado"], "concluido", tarefa)
-        self.assertEqual(len(self.servico.chamadas), 1)
-        self.assertEqual(self.servico.chamadas[0]["relato"]["texto"], TEXTO)
-        vetorizacao = self.servico.chamadas[0]["vetorizacao"]
-        self.assertEqual(len(vetorizacao["consultas"]), 11)
+        self.assertEqual(len(self.servico.chamadas), chamadas_antes + 1)
+        self.assertEqual(self.servico.chamadas[-1]["relato"]["texto"], TEXTO)
+        vetorizacao = self.servico.chamadas[-1]["vetorizacao"]
+        self.assertEqual(len(vetorizacao["consultas"]), sum(contagens.values()))
         self.assertEqual({consulta["tipo"] for consulta in vetorizacao["consultas"]},
-                         {"periodo", "contextual", "documento"})
+                         tipos)
         artefatos = {artefato["id"]: artefato for artefato in self.exportacao["artefatos"]}
         for consulta in vetorizacao["consultas"]:
             self.assertEqual(consulta["vetor"], artefatos[consulta["artefato_id"]]["valores"])
@@ -161,13 +176,16 @@ class FluxoImportadoAPITests(unittest.TestCase):
         self.assertEqual(registro["texto"], TEXTO)
         self.assertNotIn(CHAVE, json.dumps(registro))
         self.app.extensions["agente_analista"]["executor"].shutdown(wait=True)
-        reiniciada = self.nova_app().test_client()
-        self.assertEqual(reiniciada.get(f"/api/relatos/{relato_id}").get_json(), registro)
-        self.assertEqual(
-            reiniciada.get(f"/api/vetorizacoes/{importada['id']}").get_json()["relato"]["texto"], TEXTO,
-        )
-        self.assertEqual(reiniciada.get(f"/api/buscas/{busca_id}").get_json()["estado"], "concluido")
-        self.assertEqual(len(self.servico.chamadas), 1)
+        self.app = self.nova_app()
+        self.client = self.app.test_client()
+        self.assertEqual(self.client.get(f"/api/relatos/{relato_id}").get_json(), registro)
+        self.assertEqual(self.client.get(f"/api/vetorizacoes/{importada['id']}").get_json(), importada)
+        self.assertEqual(self.client.get(f"/api/buscas/{busca_id}").get_json()["estado"], "concluido")
+        self.assertEqual(self.app.extensions["agente_analista"]["banco"].obter_vetorizacao(importada["id"]),
+                         self.exportacao)
+        self.assertEqual(len(self.servico.chamadas), chamadas_antes + 1)
+        self.gerador.assert_not_called()
+        self.adaptador.assert_not_called()
         for arquivo in self.caminho.parent.glob(self.caminho.name + "*"):
             if arquivo.is_file():
                 self.assertNotIn(CHAVE.encode(), arquivo.read_bytes())

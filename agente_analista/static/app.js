@@ -210,10 +210,15 @@
     importedVectorization = record.id;
     showStory(record.relato.texto);
     const counts = record.contagens || {};
+    const descriptions = [
+      ["documento", "do relato inteiro"], ["paragrafo", "de parágrafos"],
+      ["contextual", "de janelas contextuais"], ["periodo", "de períodos"],
+    ].filter(([type]) => counts[type] > 0)
+      .map(([type, label]) => `${countFormat(counts[type])} ${counts[type] === 1 ? "consulta" : "consultas"} ${label}`);
+    const legacyHelp = record.fonte?.estrategia_consultas === "paragrafos_documento"
+      ? " Estratégia anterior de busca; consultas longas usam seus fragmentos separadamente." : "";
     elements["import-feedback"].className = "field-help";
-    elements["import-feedback"].textContent = record.fonte?.estrategia_consultas === "paragrafos_documento"
-      ? `Vetorização disponível: ${countFormat(counts.paragrafo || 0)} consultas de parágrafos e ${countFormat(counts.documento || 0)} consulta(s) do relato inteiro. Estratégia anterior de busca; consultas longas usam seus fragmentos separadamente.`
-      : `Vetorização disponível: ${countFormat(counts.periodo || 0)} períodos, ${countFormat(counts.contextual || 0)} janelas contextuais e ${countFormat(counts.documento || 0)} documento(s).`;
+    elements["import-feedback"].textContent = `Vetorização disponível: ${descriptions.join(", ")}.${legacyHelp}`;
   }
 
   async function importVectorization() {

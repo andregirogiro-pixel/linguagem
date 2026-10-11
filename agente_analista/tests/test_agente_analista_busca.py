@@ -3,6 +3,7 @@
 from collections import defaultdict
 from copy import deepcopy
 import hashlib
+from itertools import combinations
 import json
 import os
 from pathlib import Path
@@ -97,6 +98,23 @@ def _importado_analista():
     importado["consultas"] = importado["consultas"][:2] + importado["consultas"][-1:]
     for consulta, paragrafo in zip(importado["consultas"][:2], importado["relato"]["paragrafos"]):
         consulta.update(tipo="paragrafo", paragrafo_id=paragrafo["id"])
+    return importado
+
+
+def _importado_selecionado(tipos):
+    importado = _importado()
+    paragrafos = []
+    for consulta in importado["consultas"]:
+        if consulta["tipo"] != "periodo":
+            continue
+        paragrafo = deepcopy(consulta)
+        paragrafo.update(id=f"paragrafo-{consulta['periodo_id']}", tipo="paragrafo",
+                         paragrafo_id=consulta["periodo_id"], periodo_id=None, unidade_id=None,
+                         artefato_id=f"A-paragrafo-{consulta['periodo_id']}")
+        paragrafo["origem"].update(campo="segmentacao.paragrafos.texto", paragrafo_id=paragrafo["paragrafo_id"])
+        paragrafos.append(paragrafo)
+    importado["consultas"] = [c for c in importado["consultas"] + paragrafos if c["tipo"] in tipos]
+    importado["fonte"].update(perfil="e5_simetrico", tipos_representacao=list(tipos))
     return importado
 
 
@@ -208,7 +226,59 @@ class BuscaTests(unittest.TestCase):
             self.assertEqual(pontuacao["periodo_id"], consulta["periodo_id"])
             self.assertAlmostEqual(pontuacao["contribuicao_rrf"],
                                    pontuacao["contribuicao_rrf_bruta"] / (3 * pontuacao["consultas_do_tipo"]))
+        self.assertAlmostEqual(primeiro["rrf"], 2 / 61)
+        self.assertAlmostEqual(blocos[1]["rrf"], 1 / 62)
+        self.assertEqual(resultado["metodo_fusao"]["pesos_por_tipo"],
+                         {"periodo": 1 / 3, "contextual": 1 / 3, "documento": 1 / 3})
         self.assertTrue(etapas)
+
+    def test_subconjuntos_ponderam_apenas_tipos_presentes_sem_inferencia(self):
+        tipos = ("documento", "paragrafo", "contextual", "periodo")
+        for tamanho in range(1, 5):
+            for selecao in combinations(tipos, tamanho):
+                with self.subTest(tipos=selecao):
+                    importado = _importado_selecionado(selecao)
+                    antes = deepcopy(importado)
+                    with patch.dict(sys.modules, {"embeddings_e5": None, "torch": None,
+                                                   "transformers": None, "sentence_transformers": None}):
+                        resultado = self.buscador.buscar(importado)
+                    self.assertEqual(importado, antes)
+                    self.assertEqual({c["tipo"] for c in resultado["consultas"]}, set(selecao))
+                    pesos = resultado["metodo_fusao"]["pesos_por_tipo"]
+                    self.assertEqual(set(pesos), set(selecao))
+                    self.assertAlmostEqual(sum(pesos.values()), 1.0)
+                    self.assertTrue(all(peso == 1 / tamanho for peso in pesos.values()))
+                    self.assertEqual(resultado["fonte_vetorizacao"]["perfil"], "e5_simetrico")
+                    self.assertNotIn("estrategia_consultas", resultado["fonte_vetorizacao"])
+                    self.assertEqual(len(resultado["consultas"]), len(importado["consultas"]))
+                    for consulta, recebida in zip(resultado["consultas"], importado["consultas"]):
+                        self.assertEqual(consulta, {k: v for k, v in recebida.items() if k != "vetor"})
+                    primeiro, segundo = resultado["candidatos"]
+                    self.assertEqual(primeiro["bloco_id"], "sonhos#1")
+                    self.assertAlmostEqual(primeiro["rrf"], 2 / 61)
+                    self.assertAlmostEqual(segundo["rrf"], 1 / 62)
+                    for p in primeiro["pontuacoes"]:
+                        self.assertEqual(p["peso_tipo"], pesos[p["consulta_tipo"]])
+                        self.assertAlmostEqual(p["contribuicao_rrf"],
+                                               p["contribuicao_rrf_bruta"] / (tamanho * p["consultas_do_tipo"]))
+
+    def test_paragrafos_simetricos_nao_restauram_a_soma_da_estrategia_analista(self):
+        importado = _importado_selecionado(("documento", "paragrafo"))
+        resultado = self.buscador.buscar(importado)
+        self.assertEqual(resultado["metodo_fusao"]["consultas_por_tipo"], {"documento": 1, "paragrafo": 2})
+        self.assertEqual(resultado["metodo_fusao"]["pesos_por_tipo"], {"documento": 0.5, "paragrafo": 0.5})
+        paragrafo = next(c for c in importado["consultas"] if c["tipo"] == "paragrafo")
+        importado["consultas"].append({**deepcopy(paragrafo), "id": "paragrafo-extra"})
+        depois = self.buscador.buscar(importado)
+        for primeiro, segundo in zip(resultado["candidatos"], depois["candidatos"]):
+            self.assertAlmostEqual(primeiro["rrf"], segundo["rrf"])
+
+    def test_estrategia_analista_continua_restrita_a_paragrafos_e_documento(self):
+        for tipo in ("periodo", "contextual"):
+            importado = _importado_analista()
+            importado["consultas"][0]["tipo"] = tipo
+            with self.subTest(tipo=tipo), self.assertRaises(ErroBusca):
+                self.buscador.buscar(importado)
 
     def test_analista_restaura_soma_rrf_original_de_p1_p2_e_relato(self):
         resultado = self.buscador.buscar(_importado_analista())
@@ -275,11 +345,16 @@ class BuscaTests(unittest.TestCase):
                 self.buscador.buscar(_importado(vetor=vetor))
 
     def test_rejeita_tipo_desconhecido_e_identificador_repetido(self):
-        for campo, valor in (("tipo", "paragrafo"), ("id", "documento")):
+        for campo, valor in (("tipo", "capitulo"), ("tipo", ""), ("tipo", None), ("id", "documento")):
             importado = _importado()
             importado["consultas"][0][campo] = valor
             with self.subTest(campo=campo), self.assertRaises(ErroBusca):
                 self.buscador.buscar(importado)
+
+    def test_rejeita_selecao_sem_consultas(self):
+        importado = _importado_selecionado(())
+        with self.assertRaisesRegex(ErroBusca, "consultas do relato"):
+            self.buscador.buscar(importado)
 
 
 @unittest.skipUnless((RAIZ / "agente_analista/data/Vetor/vetores_fragmentos_e5.npy").is_file(),

@@ -58,7 +58,8 @@ class _BM25:
 
 class Buscador:
     K_RRF, TOP_METODO, TOP_BLOCOS = 60, 50, 12
-    PESOS_TIPOS = {"periodo": 1 / 3, "contextual": 1 / 3, "documento": 1 / 3}
+    # Pesos relativos: cada granularidade presente participa igualmente.
+    PESOS_TIPOS = {"periodo": 1.0, "contextual": 1.0, "documento": 1.0, "paragrafo": 1.0}
 
     def __init__(self, corpus):
         self.corpus = corpus
@@ -100,12 +101,16 @@ class Buscador:
         consultas = self._consultas_importadas(importado)
         estrategia_anterior = importado["fonte"].get("estrategia_consultas") == "paragrafos_documento"
         contagens = Counter(consulta["tipo"] for consulta, _ in consultas)
+        pesos = None
+        if not estrategia_anterior:
+            soma_pesos = sum(self.PESOS_TIPOS[tipo] for tipo in contagens)
+            pesos = {tipo: peso / soma_pesos for tipo, peso in self.PESOS_TIPOS.items() if tipo in contagens}
         candidatos = {}
         for numero, (consulta, vetor) in enumerate(consultas, 1):
             progresso(f"Buscando no acervo: consulta {numero} de {len(consultas)}")
             lexical = self.lexical.pontuar(consulta.get("texto_vetorizado", consulta["texto"]))
             semantica = self.corpus.vetores @ vetor
-            fator = 1.0 if estrategia_anterior else self.PESOS_TIPOS[consulta["tipo"]] / contagens[consulta["tipo"]]
+            fator = 1.0 if estrategia_anterior else pesos[consulta["tipo"]] / contagens[consulta["tipo"]]
             for metodo, pontuacoes in (("BM25", lexical), ("E5", semantica)):
                 # Lexical zero não constitui um resultado. E5 sempre examina
                 # todas as linhas; a interpretação poderá rejeitar todos.
@@ -132,7 +137,7 @@ class Buscador:
                         "artefato_id": consulta.get("artefato_id"),
                         "fragmento_id": f["id"], "rank": rank, "rank_bloco": rank_bloco,
                         "score": float(pontuacoes[indice]), "contribuicao_rrf_bruta": contribuicao_bruta,
-                        "peso_tipo": 1.0 if estrategia_anterior else self.PESOS_TIPOS[consulta["tipo"]],
+                        "peso_tipo": 1.0 if estrategia_anterior else pesos[consulta["tipo"]],
                         "consultas_do_tipo": contagens[consulta["tipo"]], "contribuicao_rrf": contribuicao})
                     if f["id"] not in candidato["fragmentos_recuperados_ids"]:
                         candidato["fragmentos_recuperados_ids"].append(f["id"])
@@ -144,13 +149,13 @@ class Buscador:
                     "top_por_metodo_consulta": self.TOP_METODO, "max_blocos": self.TOP_BLOCOS,
                     "formula": ("soma de 1/(60+rank_bloco), com uma contribuição por bloco, método e consulta"
                                 if estrategia_anterior else "soma de peso_tipo/(consultas_do_tipo*(60+rank_bloco)), com uma contribuição por bloco, método e consulta"),
-                    "pesos_por_tipo": None if estrategia_anterior else dict(self.PESOS_TIPOS), "consultas_por_tipo": dict(contagens),
+                    "pesos_por_tipo": pesos, "consultas_por_tipo": dict(contagens),
                     "normalizacao": ("estratégia anterior: cada consulta de parágrafo, relato ou recorte contribui integralmente"
-                                     if estrategia_anterior else "média das contribuições por consulta em cada tipo; períodos, contextos e documento têm pesos iguais"),
+                                     if estrategia_anterior else "média das contribuições por consulta em cada tipo; os tipos presentes têm pesos iguais"),
                     "agrupamento": "blocos distintos por ordem de primeira aparição no top 50 de fragmentos",
                     "bm25": {"k1": self.lexical.K1, "b": self.lexical.B,
                         "tokenizacao": "palavras sem acentos, minúsculas, sem palavras funcionais; sem radicalização"},
                     "semantica": "produto escalar dos vetores importados normalizados L2 com todas as linhas do corpus (similaridade cosseno)",
                     "vetorizacao": ("vetores do texto original de P1, P2 e relato inteiro; recortes E5 independentes produzidos no Língua, sem inferência no agente"
-                                    if estrategia_anterior else "vetores de períodos, janelas contextuais e documento recebidos da análise linguística; nenhuma inferência ou divisão adicional"),
+                                    if estrategia_anterior else "vetores dos tipos selecionados (períodos, parágrafos, janelas contextuais ou documento) recebidos da análise linguística; nenhuma inferência ou divisão adicional"),
                     "aviso": "Pontuações ordenam candidatos; não representam probabilidades de interpretação correta."}}

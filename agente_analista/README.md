@@ -2,8 +2,9 @@
 
 Página local para examinar ligações entre um relato em português e o acervo
 fornecido. Importa o arquivo completo `vetorizacao.json` produzido pela análise
-linguística e reaproveita seus vetores dos dois parágrafos originais e do
-relato inteiro. O relato deve ter exatamente dois parágrafos e até 400 palavras.
+linguística e reaproveita os vetores presentes: relato inteiro, parágrafos,
+contextos e períodos, conforme a seleção feita no Língua. O relato deve ter
+exatamente dois parágrafos e até 400 palavras.
 A busca consulta todos os 8.087 fragmentos e termina em uma tabela de propostas
 interpretativas. O agente não executa uma nova vetorização do relato.
 
@@ -58,6 +59,13 @@ Arquivos anteriores de períodos e janelas continuam aceitos com sua estratégia
 anterior, mas não são convertidos automaticamente. Gere um novo arquivo para
 usar as consultas por parágrafos. No Colab, gere também um **novo notebook**
 depois de atualizar o Língua: o notebook antigo contém uma cópia do código antigo.
+
+As exportações que declaram `perfil.tipos_representacao` podem conter qualquer
+combinação não vazia de relato inteiro, parágrafos, contextos e períodos. O
+agente confere a cobertura completa dos tipos escolhidos e preserva seus
+vetores, textos e referências de origem. Parágrafos dessa seleção seguem os
+IDs e recortes da segmentação exportada. A página mostra somente os tipos
+presentes; os arquivos anteriores mantêm sua estratégia de consulta.
 
 Na seção **Justificativas**, escolha o provedor, cole a chave de API no campo
 oculto e use **+** para incluir o identificador de um modelo. O seletor começa
@@ -170,7 +178,7 @@ quando a chamada de avaliação consegue alcançar o provedor.
   posições, reúne sobreposições idênticas e rejeita lacunas/conflitos.
 - A importação recebe o registro completo da vetorização da análise
   linguística. Cada vetor mantém seu tipo, texto e posição de origem. As
-  consultas de parágrafos e relato inteiro saem desse registro;
+  consultas dos tipos selecionados saem desse registro;
   não há nova inferência E5, divisão por tokens ou processamento linguístico
   no agente. Um texto diferente exige uma nova exportação correspondente.
 - A busca lexical usa BM25 (`k1=1.2`, `b=0.75`), palavras em minúsculas sem
@@ -180,9 +188,11 @@ quando a chamada de avaliação consegue alcançar o provedor.
   por similaridade cosseno. No perfil `e5_analista`, a fusão restaura a RRF
   anterior: soma `1/(60 + rank_bloco)` por método e consulta, sobre os 50
   melhores fragmentos. Cada consulta de parágrafo, documento ou recorte
-  contribui integralmente. Arquivos anteriores de períodos/janelas preservam
-  sua fórmula `peso_tipo/(consultas_do_tipo * (60 + rank_bloco))`, com peso
-  `1/3` por tipo. Cada bloco contribui
+  contribui integralmente. Nas demais exportações, a fórmula é
+  `peso_tipo/(consultas_do_tipo * (60 + rank_bloco))`, com peso `1/N` para
+  cada um dos `N` tipos presentes. Relato e parágrafos têm peso `1/2` cada;
+  períodos, contextos e relato mantêm o peso anterior de `1/3` por tipo.
+  Cada bloco contribui
   uma vez por ranking. Os 12 melhores blocos
   distintos seguem com seu contexto inteiro para avaliação; nada é filtrado
   previamente por obra ou conceito. Os parâmetros saem no JSON.

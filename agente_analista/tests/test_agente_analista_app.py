@@ -134,6 +134,22 @@ class PaginaTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/vetorizacoes/" + dados["id"]).get_json(), dados)
         self.assertEqual(self.app.extensions["agente_analista"]["banco"].obter_vetorizacao(dados["id"]), registro)
 
+    def test_resumo_mostra_tipos_das_consultas_independente_da_estrategia(self):
+        tipos = ["documento", "paragrafo", "paragrafo", "contextual", "periodo", "periodo"]
+        esperadas = {"documento": 1, "paragrafo": 2, "contextual": 1, "periodo": 2}
+        for estrategia in (None, "paragrafos_documento"):
+            with self.subTest(estrategia=estrategia):
+                fonte = {} if estrategia is None else {"estrategia_consultas": estrategia}
+                importada = {"relato": {"texto": TEXTO}, "fonte": fonte,
+                             "consultas": [{"tipo": tipo} for tipo in tipos]}
+                with (patch("agente_analista.app.importar_vetorizacao", return_value=importada),
+                      patch("agente_analista.app.conferir_compatibilidade")):
+                    resposta = self.client.post("/api/vetorizacoes", json=construir_exportacao(limite=512))
+                    self.assertEqual(resposta.status_code, 201)
+                    dados = resposta.get_json()
+                    self.assertEqual(dados["contagens"], esperadas)
+                    self.assertEqual(self.client.get("/api/vetorizacoes/" + dados["id"]).get_json(), dados)
+
     def test_entrada_invalida_nao_inicia(self):
         self.assertEqual(self.client.post("/api/buscas", json={"texto": "um"}).status_code, 400)
         self.assertFalse(self.servico.iniciou.is_set())

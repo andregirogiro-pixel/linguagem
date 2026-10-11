@@ -71,7 +71,7 @@ def _importar_atual(registro):
     from .validacao_vetorial import validar_atual
     validar_atual(registro)
     _exigir("derivacao_execucao" not in registro,
-            "Importe a execução completa da etapa 09, com períodos, janelas e documento.")
+            "Importe a execução completa da etapa 09, com todas as representações selecionadas.")
     perfil, processamento = registro["perfil"], registro["processamento"]
     _exigir(perfil["prefixo"] == "query: " and perfil["pooling"] == "mean"
             and perfil["normalizacao"] == "l2" and perfil["formato_armazenamento"] == "float32",
@@ -116,6 +116,8 @@ def _importar_atual(registro):
              "backend": processamento["backend"], "precisao_inferencia": processamento["precisao_inferencia"]}
     if perfil["id"] == "e5_analista":
         fonte["estrategia_consultas"] = "paragrafos_documento"
+    if "tipos_representacao" in perfil:
+        fonte["tipos_representacao"] = deepcopy(perfil["tipos_representacao"])
     return original, consultas, fonte
 
 

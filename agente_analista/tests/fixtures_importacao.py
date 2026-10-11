@@ -19,6 +19,7 @@ from agente_analista.contratos_importacao import hash_json
 PASTA = Path(__file__).resolve().parent / "fixtures"
 INSTANTE = "2026-10-08T09:30:00-03:00"
 TEXTO = "  Árvore\tverde.  Casa azul! \t Céu.\r\n\r\nOutro.  João saiu.  "
+TIPOS_REPRESENTACAO = ("documento", "paragrafo", "contextual", "periodo")
 
 
 def _ler(nome):
@@ -80,8 +81,22 @@ def construir_exportacao(*, normalizar=False, dimensao=1024, limite=160,
             "exportacao_atual_fragmentada" if limite == 23 else "exportacao_atual")
     registro = _ler(nome)
     perfil = carregar_perfil(perfil_id, opcoes=opcoes)
+    return recalcular_exportacao(registro, perfil=perfil, dimensao=dimensao, limite=limite)
+
+
+def recalcular_exportacao(registro, *, perfil=None, dimensao=None, limite=None):
+    """Recrie identidades e bytes depois de adaptar uma exportação de teste.
+
+    Não constrói textos, fragmentos ou origens: esses dados continuam os da
+    referência congelada. Isso permite testar metadados adulterados mantendo
+    consistentes os hashes que não são o objeto daquela verificação.
+    """
+    registro = deepcopy(registro)
+    perfil = deepcopy(registro["perfil"] if perfil is None else perfil)
     registro["perfil"] = perfil
     proc = registro["processamento"]
+    dimensao = proc["dimensao"] if dimensao is None else dimensao
+    limite = proc["limite_modelo_tokens"] if limite is None else limite
     proc["dimensao"] = proc["adaptador"]["dimensao"] = dimensao
     proc["limite_tokens"] = perfil["limite_tokens"] or limite
     proc["limite_modelo_tokens"] = proc["adaptador"]["limite_tokens"] = limite
@@ -124,3 +139,43 @@ def construir_exportacao(*, normalizar=False, dimensao=1024, limite=160,
         for fragmento in rep["fragmentos"]:
             fragmento["artefato_id"] = substituidos[fragmento["artefato_id"]]
     return registro
+
+
+def construir_exportacao_selecao(tipos, *, normalizar=False, dimensao=1024,
+                                fragmentar=False, texto_documento="trabalho", limite=None):
+    """Escolha representações de uma referência ALL4 do produtor 39ae237.
+
+    Os casos de seleção inválida devem adulterar o perfil posteriormente e
+    chamar recalcular_exportacao; a escolha normal gera ordem canônica.
+    """
+    if (type(tipos) is not list or not tipos
+            or any(type(tipo) is not str or tipo not in TIPOS_REPRESENTACAO for tipo in tipos)
+            or len(set(tipos)) != len(tipos)):
+        raise ValueError("Escolha tipos válidos, únicos e não vazios na fixture.")
+    if texto_documento not in ("trabalho", "original"):
+        raise ValueError("Campo de documento não previsto na fixture.")
+    if fragmentar:
+        if texto_documento != "trabalho" or not normalizar:
+            raise ValueError("A referência fragmentada declara CRLF normalizado e documento de trabalho.")
+        nome = "exportacao_selecao_fragmentada"
+    elif normalizar:
+        nome = "exportacao_selecao_original" if texto_documento == "original" else "exportacao_selecao_crlf"
+    else:
+        # Sem normalização, texto e mapas original/trabalho coincidem; a
+        # referência usa trabalho para preservar exatamente a saída congelada.
+        if texto_documento != "trabalho":
+            raise ValueError("A referência de documento original exige normalizar=True.")
+        nome = "exportacao_selecao_todos"
+    registro = _ler(nome)
+    registro["perfil"]["tipos_representacao"] = [tipo for tipo in TIPOS_REPRESENTACAO if tipo in tipos]
+    registro["representacoes"] = [rep for rep in registro["representacoes"] if rep["tipo"] in tipos]
+    usados = set()
+    for ordem, rep in enumerate(registro["representacoes"]):
+        rep.update(id=f"{registro['execucao_id']}:representacao:{ordem}", ordem=ordem)
+        usados.add(rep["artefato_id"])
+        usados.update(fragmento["artefato_id"] for fragmento in rep["fragmentos"])
+    registro["artefatos"] = [artefato for artefato in registro["artefatos"] if artefato["id"] in usados]
+    registro["validacao"]["cobertura"].update(
+        representacoes_total=len(registro["representacoes"]), artefatos_total=len(registro["artefatos"]),
+    )
+    return recalcular_exportacao(registro, dimensao=dimensao, limite=limite)

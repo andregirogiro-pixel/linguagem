@@ -147,10 +147,9 @@ def criar_app(config=None, *, servico=None):
         return importada
 
     def resumo_vetorizacao(identificador, importada):
-        tipos = (("paragrafo", "documento") if importada["fonte"].get("estrategia_consultas") == "paragrafos_documento"
-                 else ("periodo", "contextual", "documento"))
         contagens = {tipo: sum(c["tipo"] == tipo for c in importada["consultas"])
-                     for tipo in tipos}
+                     for tipo in ("periodo", "contextual", "paragrafo", "documento")}
+        contagens = {tipo: total for tipo, total in contagens.items() if total}
         return {"id": identificador, "relato": importada["relato"],
                 "fonte": importada["fonte"], "contagens": contagens}
 
