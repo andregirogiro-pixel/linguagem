@@ -5,6 +5,7 @@ As anotações linguísticas da origem são manuais e controladas.
 """
 
 import copy
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import sqlite3
@@ -25,6 +26,17 @@ from trabalhos_vetorizacao import processar_trabalho
 from vetorizacao import validar_vetorizacao
 from fixtures_vetorizacao import AdaptadorControlado
 
+
+class _CheckboxesVetorizacao(HTMLParser):
+    def __init__(self, pagina):
+        super().__init__()
+        self.opcoes = {}
+        self.feed(pagina)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "input" and attrs.get("name") == "tipos_representacao":
+            self.opcoes[attrs["value"]] = attrs
 
 
 
@@ -335,6 +347,85 @@ class VectorAppTests(unittest.TestCase):
         self.assertIs(kwargs["carregar_contexto"], load_vector_context)
         self.assertEqual(kwargs["max_workers"], 2)
         self.assertEqual(self.status(document_id, response.get_json()).status_code, 200)
+
+    def test_selected_types_are_persisted_downloaded_and_restored_after_restart(self):
+        document_id, context = self.source(normalizar=True)
+        before = self.snapshot()
+        first = self.enqueue(document_id, opcoes={"tipos_representacao": ["paragrafo"]})
+        self.process(first)
+        result = self.download(document_id, first["execucao_id"]).get_json()
+        validar_vetorizacao(result)
+        self.assertEqual(result["perfil"]["tipos_representacao"], ["paragrafo"])
+        self.assertEqual([rep["tipo"] for rep in result["representacoes"]], ["paragrafo"] * 2)
+        self.assertEqual(result["contexto"], context)
+        second = self.enqueue(document_id, opcoes={"tipos_representacao": ["periodo", "documento"]})
+        self.process(second)
+        alternate = self.download(document_id, second["execucao_id"]).get_json()
+        self.assertEqual(alternate["perfil"]["tipos_representacao"], ["documento", "periodo"])
+        self.assertEqual([rep["tipo"] for rep in alternate["representacoes"]], ["documento"] + ["periodo"] * 5)
+        self.assertEqual(result["espaco_vetorial_id"], alternate["espaco_vetorial_id"])
+        self.assertNotEqual(first["execucao_id"], second["execucao_id"])
+        restarted = create_app(self.config).test_client()
+        self.assertEqual(self.download(document_id, first["execucao_id"], restarted).get_json(), result)
+        self.assertEqual(self.download(document_id, second["execucao_id"], restarted).get_json(), alternate)
+        self.assertEqual(restarted.get(first["status_url"]).get_json()["opcoes"]["tipos_representacao"], ["paragrafo"])
+        query = {"vetorizacao_execucao_id": first["execucao_id"], "representacao_id": result["representacoes"][0]["id"]}
+        individual = restarted.get(f"/envios/{document_id}/representacao-vetorial.json", query_string=query)
+        self.assertEqual(individual.status_code, 200)
+        self.assertEqual(individual.get_json()["representacao"], result["representacoes"][0])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_form_accepts_multiple_types_but_rejects_no_selection_and_invalid_types(self):
+        document_id, context = self.source()
+        path = f"/envios/{document_id}/vetorizacoes"
+        common = [("contexto_execucao_id", context["execucao_id"]), ("tipos_representacao_presentes", "1")]
+        response = self.client.post(path, data=MultiDict(common + [
+            ("tipos_representacao", "periodo"), ("tipos_representacao", "documento"),
+        ]))
+        self.assertEqual(response.status_code, 303, response.get_data(as_text=True))
+        job_id = parse_qs(urlsplit(response.headers["Location"]).query)["vetorizacao_execucao_id"][0]
+        status = self.client.get(f"{path}/{job_id}").get_json()
+        self.assertEqual(status["perfil"]["tipos_representacao"], ["documento", "periodo"])
+        for values in ([], ["desconhecido"], ["documento", "documento"]):
+            with self.subTest(values=values):
+                with sqlite3.connect(self.database) as connection:
+                    before = connection.execute("SELECT COUNT(*) FROM vector_jobs").fetchone()[0]
+                invalid = MultiDict(common + [("tipos_representacao", value) for value in values])
+                response = self.client.post(path, data=invalid)
+                self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+                with sqlite3.connect(self.database) as connection:
+                    self.assertEqual(connection.execute("SELECT COUNT(*) FROM vector_jobs").fetchone()[0], before)
+
+    def test_api_rejects_invalid_selections_and_duplicate_json_keys(self):
+        document_id, _ = self.source()
+        path = f"/envios/{document_id}/vetorizacoes"
+        for types in ([], None, "documento", [False], ["desconhecido"], ["paragrafo", "paragrafo"]):
+            with self.subTest(types=types):
+                response = self.client.post(path, json={"opcoes": {"tipos_representacao": types}})
+                self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        for body in (
+            '{"opcoes":{"tipos_representacao":["documento"],"tipos_representacao":["periodo"]}}',
+            '{"opcoes":{"tipos_representacao":["documento"]},"opcoes":{"tipos_representacao":["periodo"]}}',
+        ):
+            response = self.client.post(path, data=body, content_type="application/json")
+            self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+
+    def test_interface_defaults_to_document_and_restores_historical_selection(self):
+        document_id, _ = self.source()
+        page = self.client.get(f"/envios/{document_id}").get_data(as_text=True)
+        checkboxes = _CheckboxesVetorizacao(page).opcoes
+        self.assertEqual(set(checkboxes), {"documento", "paragrafo", "contextual", "periodo"})
+        self.assertEqual({tipo for tipo, attrs in checkboxes.items() if "checked" in attrs}, {"documento"})
+        self.assertTrue(all(attrs.get("type") == "checkbox" for attrs in checkboxes.values()))
+        self.assertIn('name="tipos_representacao_presentes" value="1"', page)
+        selected = self.enqueue(document_id, opcoes={"tipos_representacao": ["paragrafo", "contextual"]})
+        self.process(selected)
+        self.enqueue(document_id, opcoes={"tipos_representacao": ["documento"]})
+        historical_page = self.client.get(selected["detalhe_url"]).get_data(as_text=True)
+        historical = _CheckboxesVetorizacao(historical_page).opcoes
+        self.assertEqual({tipo for tipo, attrs in historical.items() if "checked" in attrs}, {"paragrafo", "contextual"})
+        for label in ("Relato inteiro", "Parágrafos", "Contextos", "Períodos"):
+            self.assertIn(label, page)
 
 
 if __name__ == "__main__":

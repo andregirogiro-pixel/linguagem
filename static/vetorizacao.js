@@ -2,6 +2,39 @@
 (() => {
   "use strict";
 
+  document.querySelectorAll("[data-vector-form]").forEach((form) => {
+    const fieldset = form.querySelector("[data-vector-types]");
+    const choices = [...form.querySelectorAll('input[name="tipos_representacao"]')];
+    const selectionError = form.querySelector("#vector-types-error");
+    if (!fieldset || choices.length === 0) return;
+
+    const validateSelection = () => {
+      const selected = choices.some((choice) => choice.checked);
+      choices[0].setCustomValidity(selected ? "" : "Selecione ao menos um tipo de representação.");
+      if (selected) {
+        fieldset.removeAttribute("aria-invalid");
+        if (selectionError) selectionError.hidden = true;
+      }
+      return selected;
+    };
+    const showSelectionError = () => {
+      fieldset.setAttribute("aria-invalid", "true");
+      if (selectionError) selectionError.hidden = false;
+    };
+    choices.forEach((choice) => choice.addEventListener("change", () => {
+      if (!validateSelection()) showSelectionError();
+    }));
+    choices[0].addEventListener("invalid", showSelectionError);
+    form.addEventListener("submit", (event) => {
+      if (!validateSelection()) {
+        event.preventDefault();
+        showSelectionError();
+        choices[0].reportValidity();
+      }
+    });
+    validateSelection();
+  });
+
   const stateLabels = {
     enfileirada: "Na fila",
     executando: "Gerando vetores",
@@ -46,7 +79,7 @@
             progress.max = total;
             progress.value = completed;
           }
-          if (label) label.textContent = `${completed} de ${total} artefatos concluídos.`;
+          if (label) label.textContent = `${completed} de ${total} cálculos concluídos.`;
         } else {
           if (progress) progress.removeAttribute("value");
           if (label) label.textContent = "Preparando o processamento.";

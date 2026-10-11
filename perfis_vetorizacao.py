@@ -16,6 +16,7 @@ class ErroPerfil(ValueError):
 E5_REVISAO = "3d7cfbdacd47fdda877c5cd8a79fbcc4f2a574f3"
 E5_MODELO = "intfloat/multilingual-e5-large"
 _VERSAO = "1.0.0"
+TIPOS_REPRESENTACAO = ("documento", "paragrafo", "contextual", "periodo")
 _FINALIDADES = {
     "e5_consulta": ("consulta", "query: "),
     "e5_conteudo": ("conteudo", "passage: "),
@@ -26,7 +27,7 @@ _OPCOES = {
     "modelo", "revisao", "tokenizador", "tokenizador_revisao", "backend",
     "dispositivo", "lote", "precisao_inferencia", "formato_armazenamento",
     "limite_tokens", "pooling", "normalizacao", "prefixo", "fragmentacao",
-    "agregacao", "texto_documento", "cache_modelos", "somente_local",
+    "agregacao", "texto_documento", "cache_modelos", "somente_local", "tipos_representacao",
     "corte_caracteres", "cabecalho", "juntar_paragrafos", "arquivo_onnx", "modelo_onnx_sha256", "arquivos_onnx_sha256",
 }
 _ENUMS = {
@@ -93,6 +94,15 @@ def carregar_perfil(perfil_id="e5_simetrico", *, opcoes=None):
     if desconhecidas:
         raise ErroPerfil("Opções desconhecidas: " + ", ".join(sorted(desconhecidas)))
     opcoes = deepcopy(opcoes)
+    if "tipos_representacao" in opcoes:
+        tipos = opcoes["tipos_representacao"]
+        if type(tipos) is not list or not tipos or any(
+            type(tipo) is not str or tipo not in TIPOS_REPRESENTACAO for tipo in tipos
+        ):
+            raise ErroPerfil("tipos_representacao deve ser uma lista não vazia de documento, paragrafo, contextual ou periodo.")
+        if len(set(tipos)) != len(tipos):
+            raise ErroPerfil("tipos_representacao não pode conter tipos repetidos.")
+        opcoes["tipos_representacao"] = [tipo for tipo in TIPOS_REPRESENTACAO if tipo in tipos]
     finalidade, prefixo = _FINALIDADES[perfil_id]
     modelo = opcoes.pop("modelo", E5_MODELO)
     revisao = opcoes.pop("revisao", None)
@@ -199,7 +209,7 @@ def validar_perfil(perfil):
         raise ErroPerfil("Perfil deve ser objeto JSON.")
     esperado = carregar_perfil(perfil.get("id"))
     obrigatorios = set(esperado)
-    if not obrigatorios.issubset(perfil) or set(perfil) - obrigatorios - {"arquivo_onnx", "modelo_onnx_sha256", "arquivos_onnx_sha256"}:
+    if not obrigatorios.issubset(perfil) or set(perfil) - obrigatorios - {"arquivo_onnx", "modelo_onnx_sha256", "arquivos_onnx_sha256", "tipos_representacao"}:
         raise ErroPerfil("Campos do perfil incompletos ou desconhecidos.")
     if perfil.get("versao") != _VERSAO:
         raise ErroPerfil("Versão de perfil desconhecida.")

@@ -678,6 +678,15 @@
         {% set current_vector_job = vector_job|default(none) %}
         {% set current_vectors = vectorized|default(none) %}
         {% set saved_vector_jobs = vector_history|default([], true) %}
+        {% set representation_types = [
+          {'id': 'documento', 'nome': 'Relato inteiro', 'singular': 'Relato inteiro', 'descricao': 'Uma representação do texto completo.'},
+          {'id': 'paragrafo', 'nome': 'Parágrafos', 'singular': 'Parágrafo', 'descricao': 'Uma representação de cada parágrafo da segmentação.'},
+          {'id': 'contextual', 'nome': 'Contextos', 'singular': 'Contexto', 'descricao': 'Uma representação de cada janela construída na etapa Contexto, que pode reunir vários períodos.'},
+          {'id': 'periodo', 'nome': 'Períodos', 'singular': 'Período', 'descricao': 'Uma representação de cada período identificado na segmentação.'}
+        ] %}
+        {% set legacy_representation_types = ['documento', 'contextual', 'periodo'] %}
+        {% set saved_vector_options = current_vector_job.opcoes if current_vector_job else {} %}
+        {% set selected_representation_types = saved_vector_options.get('tipos_representacao', legacy_representation_types) if current_vector_job else ['documento'] %}
         {% set available_vector_profiles = vector_profiles|default([
           {'id': 'e5_simetrico', 'nome': 'Comparação entre textos'},
           {'id': 'e5_consulta', 'nome': 'Consulta para recuperação'},
@@ -688,15 +697,29 @@
         <section class="editor vector-panel stage-panel" id="etapa-vetorizacao" data-stage-panel="vetorizacao" aria-labelledby="vector-title">
           <div class="editor-heading">
             <h2 id="vector-title">Vetorização</h2>
-            <p>Gere representações do período, de seu contexto e do documento, preservando o texto e as referências de origem.</p>
+            <p>Escolha quais partes do relato serão vetorizadas, preservando o texto e as referências de origem.</p>
           </div>
           {% if contextualized.validacao.pronto_para_etapa_09 %}
-          <form method="post" action="{{ url_for('vector_submission', record_id=record.id) }}">
+          <form method="post" action="{{ url_for('vector_submission', record_id=record.id) }}" data-vector-form>
             <input type="hidden" name="contexto_execucao_id" value="{{ contextualized.execucao_id }}">
+            <input type="hidden" name="tipos_representacao_presentes" value="1">
+            <fieldset class="vector-types" data-vector-types aria-describedby="vector-types-help vector-types-error">
+              <legend>O que você deseja vetorizar?</legend>
+              <p id="vector-types-help" class="option-help">Marque uma ou mais opções. Apenas os tipos escolhidos serão gerados e salvos nesta execução.</p>
+              <div class="vector-type-options">
+                {% for representation_type in representation_types %}
+                <label class="vector-type-option" for="vector-type-{{ representation_type.id }}">
+                  <input type="checkbox" id="vector-type-{{ representation_type.id }}" name="tipos_representacao" value="{{ representation_type.id }}"{% if representation_type.id in selected_representation_types %} checked{% endif %} aria-describedby="vector-type-help-{{ representation_type.id }}">
+                  <span><span class="vector-type-name">{{ representation_type.nome }}</span><span id="vector-type-help-{{ representation_type.id }}" class="option-help">{{ representation_type.descricao }}</span></span>
+                </label>
+                {% endfor %}
+              </div>
+              <p id="vector-types-error" class="rule-pending" role="alert" hidden>Selecione ao menos um tipo de representação.</p>
+            </fieldset>
             <label for="vector-profile">Finalidade
               <select id="vector-profile" name="perfil_id" aria-describedby="vector-profile-help" required>
                 {% for profile in available_vector_profiles %}
-                <option value="{{ profile.id }}"{% if profile.id == 'e5_simetrico' %} selected{% endif %}>{{ profile.nome }}</option>
+                <option value="{{ profile.id }}"{% if profile.id == (current_vector_job.perfil_id if current_vector_job else 'e5_simetrico') %} selected{% endif %}>{{ profile.nome }}</option>
                 {% endfor %}
               </select>
             </label>
@@ -705,15 +728,15 @@
               <summary>Configuração de execução</summary>
               <div class="vector-options">
                 <label for="vector-device">Dispositivo
-                  <input id="vector-device" name="dispositivo" value="cpu" list="vector-devices" aria-describedby="vector-device-help" required>
+                  <input id="vector-device" name="dispositivo" value="{{ saved_vector_options.get('dispositivo', 'cpu') }}" list="vector-devices" aria-describedby="vector-device-help" required>
                   <datalist id="vector-devices"><option value="cpu">CPU</option><option value="cuda">GPU CUDA</option><option value="cuda:0">GPU CUDA 0</option><option value="mps">GPU Apple</option></datalist>
                 </label>
                 <label for="vector-batch">Tamanho do lote
-                  <input id="vector-batch" name="lote" type="number" min="1" step="1" placeholder="Padrão do perfil">
+                  <input id="vector-batch" name="lote" type="number" min="1" step="1" value="{{ saved_vector_options.get('lote', '') }}" placeholder="Padrão do perfil">
                 </label>
                 <label for="vector-format">Formato de armazenamento
                   <select id="vector-format" name="formato_armazenamento">
-                    <option value="">Padrão do perfil</option><option value="float16">float16</option><option value="float32">float32</option><option value="float64">float64</option>
+                    <option value="">Padrão do perfil</option>{% for format in ['float16', 'float32', 'float64'] %}<option value="{{ format }}"{% if saved_vector_options.get('formato_armazenamento') == format %} selected{% endif %}>{{ format }}</option>{% endfor %}
                   </select>
                 </label>
               </div>
@@ -724,7 +747,7 @@
               <button type="submit">Gerar vetores <span aria-hidden="true">→</span></button>
               <button type="submit" class="vector-colab-button" formaction="{{ url_for('notebook_colab_submission', record_id=record.id) }}" aria-describedby="vector-colab-help vector-colab-data">Gerar notebook para o Colab</button>
             </div>
-            <p id="vector-colab-help" class="option-help">Sem o E5 instalado? Baixe o notebook com o texto original e o histórico das etapas 03–08. Ele usa a finalidade, o lote e o formato selecionados, baixa o modelo no Colab e escolhe GPU quando disponível ou CPU. O dispositivo acima vale para a execução local.</p>
+            <p id="vector-colab-help" class="option-help">Sem o E5 instalado? Baixe o notebook com o texto original e o histórico das etapas 03–08. Ele usa os tipos de representação, a finalidade, o lote e o formato selecionados, baixa o modelo no Colab e escolhe GPU quando disponível ou CPU. O dispositivo acima vale para a execução local.</p>
             <p id="vector-colab-data" class="option-help">Ao abrir o notebook no Colab, você envia o texto e seus registros ao Google. Ao terminar, baixe o pacote com os vetores e o histórico; os resultados não são importados automaticamente no Língua.</p>
           </form>
           {% else %}
@@ -737,10 +760,11 @@
           {% set job_total = job_progress.total|default(0, true) %}
           <div class="vector-job"{% if current_vector_job.estado in ['enfileirada', 'executando'] %} data-vector-status-url="{{ url_for('vector_status', record_id=record.id, execution_id=current_vector_job.execucao_id) }}" data-vector-detail-url="{{ url_for('submission', record_id=record.id, vetorizacao_execucao_id=current_vector_job.execucao_id) }}"{% endif %}>
             <h3>Execução atual</h3>
+            <p class="vector-selected-types">Tipos escolhidos: {% for type in representation_types if type.id in selected_representation_types %}{{ type.nome }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
             <p class="vector-status" role="status" aria-live="polite" data-vector-state>{{ vector_state_labels.get(current_vector_job.estado, current_vector_job.estado) }}</p>
             {% if current_vector_job.estado in ['enfileirada', 'executando'] %}
             <progress class="vector-progress" aria-label="Progresso da vetorização" data-vector-progress{% if job_total > 0 %} max="{{ job_total }}" value="{{ job_completed }}"{% endif %}></progress>
-            <p class="option-help" data-vector-progress-label>{% if job_total > 0 %}{{ job_completed }} de {{ job_total }} artefatos concluídos.{% else %}Preparando o processamento.{% endif %}</p>
+            <p class="option-help" data-vector-progress-label>{% if job_total > 0 %}{{ job_completed }} de {{ job_total }} cálculos concluídos.{% else %}Preparando o processamento.{% endif %}</p>
             <p class="option-help" data-vector-poll-error hidden></p>
             <noscript><p class="option-help">Atualize esta página para acompanhar o processamento.</p></noscript>
             {% endif %}
@@ -767,8 +791,8 @@
           {% if current_vectors %}
           {% set vector_artifacts = {} %}
           {% for artifact in current_vectors.artefatos %}{% set _ = vector_artifacts.update({artifact.id: artifact}) %}{% endfor %}
-          {% set representation_names = {'periodo': 'Período', 'contextual': 'Contexto', 'documento': 'Documento'} %}
           {% set vector_method_names = {'direto': 'Direto', 'agregado': 'Agregado', 'derivado': 'Derivado', 'sem_conteudo': 'Sem conteúdo'} %}
+          {% set vector_preparation = current_vectors.contexto.regras.analise.anotacao.segmentacao.preparacao %}
           <div class="vector-result">
             {% if current_vectors.artefatos %}
             <p class="rule-readiness" role="status">Vetorização concluída e validada.</p>
@@ -780,32 +804,46 @@
             <p class="rule-pending">Esta execução contém representações com cobertura parcial. Os trechos omitidos estão registrados no JSON; o texto de origem permanece intacto.</p>
             {% endif %}
             <dl class="unit-counts vector-counts">
-              <div><dt>Períodos</dt><dd>{{ current_vectors.representacoes|selectattr('tipo', 'equalto', 'periodo')|list|length }}</dd></div>
-              <div><dt>Contextos</dt><dd>{{ current_vectors.representacoes|selectattr('tipo', 'equalto', 'contextual')|list|length }}</dd></div>
-              <div><dt>Documento</dt><dd>{{ current_vectors.representacoes|selectattr('tipo', 'equalto', 'documento')|list|length }}</dd></div>
+              <div><dt>Representações</dt><dd>{{ current_vectors.representacoes|length }}</dd></div>
+              {% for type in representation_types if type.id in selected_representation_types %}
+              <div><dt>{{ type.nome }}</dt><dd>{{ current_vectors.representacoes|selectattr('tipo', 'equalto', type.id)|list|length }}</dd></div>
+              {% endfor %}
             </dl>
             <a class="download-link" href="{{ url_for('vector_json', record_id=record.id, vetorizacao_execucao_id=current_vectors.execucao_id) }}">Baixar vetorização JSON <span aria-hidden="true">↓</span></a>
-            <p class="table-description vector-table-description">Cada representação mantém vínculo com sua origem. O JSON inclui a configuração e os vetores dos fragmentos quando houver agregação.</p>
-            <div class="table-scroll" tabindex="0" role="region" aria-label="Representações vetoriais">
+            <p class="table-description vector-table-description">As representações estão organizadas pelo tipo escolhido. Cada uma mantém o texto e o vínculo com sua origem.</p>
+            {% for type in representation_types %}
+            {% set type_representations = current_vectors.representacoes|selectattr('tipo', 'equalto', type.id)|list %}
+            {% if type_representations %}
+            <section class="vector-representation-group" aria-labelledby="vector-group-{{ type.id }}">
+              <h3 id="vector-group-{{ type.id }}">{{ type.nome }} <span class="vector-group-count">({{ type_representations|length }})</span></h3>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Representações: {{ type.nome }}">
               <table class="analysis-table vector-table">
-                <thead><tr><th scope="col">Representação</th><th scope="col">Método</th><th scope="col">Dimensão</th><th scope="col">Formato</th><th scope="col">Cobertura</th><th scope="col">Consulta</th></tr></thead>
+                <thead><tr><th scope="col">Representação</th><th scope="col">Texto de origem</th><th scope="col">Cobertura</th><th scope="col">Consulta</th><th scope="col">Detalhes</th></tr></thead>
                 <tbody>
-                  {% for representation in current_vectors.representacoes %}
+                  {% for representation in type_representations %}
                   {% set artifact = vector_artifacts.get(representation.artefato_id) %}
+                  {% set source_field = current_vectors.perfil.texto_documento if representation.tipo == 'documento' else 'trabalho' %}
+                  {% set source_interval = representation.origem[source_field] %}
+                  {% set source_text = vector_preparation[source_field].texto[source_interval.inicio:source_interval.fim] %}
                   <tr>
-                    <td>{{ representation_names.get(representation.tipo, representation.tipo) }}{% if representation.origem.unidade_id|default(none) %}<details class="token-details"><summary>Origem</summary><dl><dt>Unidade</dt><dd>{{ representation.origem.unidade_id }}</dd><dt>Trabalho</dt><dd>[{{ representation.origem.trabalho.inicio }}, {{ representation.origem.trabalho.fim }})</dd></dl></details>{% endif %}</td>
-                    <td>{{ vector_method_names.get(representation.metodo, representation.metodo) }}</td>
-                    <td>{% if artifact %}{{ artifact.dimensao }}{% else %}<span class="unavailable">Sem vetor</span>{% endif %}</td>
-                    <td>{% if artifact %}{{ artifact.formato }}{% else %}—{% endif %}</td>
+                    <th scope="row">{{ type.singular }}{% if type.id != 'documento' %} {{ loop.index }}{% endif %}</th>
+                    <td class="vector-source-text">{{ source_text|truncate(240, true) }}{% if source_text|length > 240 %}<details class="token-details"><summary>Texto completo</summary><p>{{ source_text }}</p></details>{% endif %}</td>
                     <td>{% if representation.cobertura_integral %}Integral{% else %}<span class="rule-pending">Parcial</span>{% endif %}</td>
-                    <td><a href="{{ url_for('vector_representation_json', record_id=record.id, vetorizacao_execucao_id=current_vectors.execucao_id, representacao_id=representation.id) }}">JSON <span class="visually-hidden">da representação {{ loop.index }}</span></a></td>
+                    <td><a href="{{ url_for('vector_representation_json', record_id=record.id, vetorizacao_execucao_id=current_vectors.execucao_id, representacao_id=representation.id) }}">JSON <span class="visually-hidden">de {{ type.singular }} {{ loop.index }}</span></a></td>
+                    <td><details class="token-details"><summary>Processamento e origem</summary><dl><dt>Método</dt><dd>{{ vector_method_names.get(representation.metodo, representation.metodo) }}</dd><dt>Dimensão</dt><dd>{% if artifact %}{{ artifact.dimensao }}{% else %}Sem vetor{% endif %}</dd><dt>Formato</dt><dd>{% if artifact %}{{ artifact.formato }}{% else %}—{% endif %}</dd><dt>Fragmentos</dt><dd>{{ representation.fragmentos|length }}</dd>{% if representation.origem.unidade_id|default(none) %}<dt>Unidade</dt><dd>{{ representation.origem.unidade_id }}</dd>{% endif %}{% if representation.origem.paragrafo_id|default(none) %}<dt>Parágrafo</dt><dd>{{ representation.origem.paragrafo_id }}</dd>{% endif %}<dt>Trabalho</dt><dd>[{{ representation.origem.trabalho.inicio }}, {{ representation.origem.trabalho.fim }})</dd></dl></details></td>
                   </tr>
-                  {% else %}
-                  <tr><td colspan="6" class="empty-result">Nenhuma representação vetorial nesta execução.</td></tr>
                   {% endfor %}
                 </tbody>
               </table>
             </div>
+            </section>
+            {% endif %}
+            {% endfor %}
+            {% if not current_vectors.representacoes %}<p class="empty-result">Nenhuma representação vetorial nesta execução.</p>{% endif %}
+            <details class="vector-references">
+              <summary>Artefatos técnicos ({{ current_vectors.artefatos|length }})</summary>
+              <p class="option-help">Este total inclui vetores de fragmentos e de agregação usados para construir as {{ current_vectors.representacoes|length }} representações. Textos longos podem precisar de vários fragmentos; entradas iguais podem compartilhar um artefato. O JSON conserva esses detalhes.</p>
+            </details>
             <details class="vector-references">
               <summary>Modelo, perfil e integridade</summary>
               <dl class="context-positions">
@@ -822,7 +860,7 @@
           <details class="vector-history">
             <summary>Experimentos de vetorização ({{ saved_vector_jobs|length }})</summary>
             <ul>{% for history in saved_vector_jobs %}
-              <li><a href="{{ url_for('submission', record_id=record.id, vetorizacao_execucao_id=history.execucao_id) }}"{% if current_vector_job and history.execucao_id == current_vector_job.execucao_id %} aria-current="page"{% endif %}>{{ history.perfil_id }} · {{ vector_state_labels.get(history.estado, history.estado) }}</a> <time datetime="{{ history.registrado_em }}">{{ history.registrado_em|horario_brasilia }} (horário de Brasília)</time>{% if current_vector_job and history.execucao_id == current_vector_job.execucao_id %} <span class="current-analysis">Em exibição</span>{% endif %}<span class="vector-history-origin">Contexto: {{ history.contexto_execucao_id }}</span></li>
+              <li><a href="{{ url_for('submission', record_id=record.id, vetorizacao_execucao_id=history.execucao_id) }}"{% if current_vector_job and history.execucao_id == current_vector_job.execucao_id %} aria-current="page"{% endif %}>{{ history.perfil_id }} · {{ vector_state_labels.get(history.estado, history.estado) }}</a> <time datetime="{{ history.registrado_em }}">{{ history.registrado_em|horario_brasilia }} (horário de Brasília)</time>{% if current_vector_job and history.execucao_id == current_vector_job.execucao_id %} <span class="current-analysis">Em exibição</span>{% endif %}<span class="vector-history-origin">Tipos: {% for type in representation_types if type.id in history.opcoes.get('tipos_representacao', legacy_representation_types) %}{{ type.nome }}{% if not loop.last %}, {% endif %}{% endfor %} · Contexto: {{ history.contexto_execucao_id }}</span></li>
             {% endfor %}</ul>
           </details>
           {% endif %}

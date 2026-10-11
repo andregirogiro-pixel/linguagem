@@ -192,19 +192,43 @@ def _mapa(preparacao, inicio, fim, campo="trabalho"):
 
 
 def _descricoes(contexto, perfil, preparacao):
-    for unidade in contexto["unidades"]:
-        for tipo, campo in (("periodo", "foco"), ("contextual", "janela")):
-            bloco = unidade[campo]
-            yield {"tipo": tipo, "texto": bloco["texto"], "campo_texto": "trabalho",
-                   "origem": {"campo": f"unidades.{campo}.texto", "unidade_id": unidade["id"],
-                              "periodo_foco_id": unidade["periodo_foco_id"],
-                              "janela_logica_id": unidade["janela_logica_id"],
-                              "trabalho": deepcopy(bloco["trabalho"]),
-                              "original": deepcopy(bloco["original"])}}
-    campo = perfil["texto_documento"]
-    texto = preparacao[campo]["texto"]
-    yield {"tipo": "documento", "texto": texto, "campo_texto": campo,
-           "origem": {"campo": f"preparacao.{campo}.texto", **_mapa(preparacao, 0, len(texto), campo)}}
+    def descricao_unidade(unidade, tipo):
+        campo = "foco" if tipo == "periodo" else "janela"
+        bloco = unidade[campo]
+        return {"tipo": tipo, "texto": bloco["texto"], "campo_texto": "trabalho",
+                "origem": {"campo": f"unidades.{campo}.texto", "unidade_id": unidade["id"],
+                           "periodo_foco_id": unidade["periodo_foco_id"],
+                           "janela_logica_id": unidade["janela_logica_id"],
+                           "trabalho": deepcopy(bloco["trabalho"]),
+                           "original": deepcopy(bloco["original"])}}
+
+    def descricao_documento():
+        campo = perfil["texto_documento"]
+        texto = preparacao[campo]["texto"]
+        return {"tipo": "documento", "texto": texto, "campo_texto": campo,
+                "origem": {"campo": f"preparacao.{campo}.texto", **_mapa(preparacao, 0, len(texto), campo)}}
+
+    if "tipos_representacao" not in perfil:
+        # Registros anteriores conservam a mesma ordem, estrutura e identidade.
+        for unidade in contexto["unidades"]:
+            for tipo in ("periodo", "contextual"):
+                yield descricao_unidade(unidade, tipo)
+        yield descricao_documento()
+        return
+
+    for tipo in perfil["tipos_representacao"]:
+        if tipo == "documento":
+            yield descricao_documento()
+        elif tipo == "paragrafo":
+            segmentacao = contexto["regras"]["analise"]["anotacao"]["segmentacao"]
+            for paragrafo in segmentacao["paragrafos"]:
+                yield {"tipo": "paragrafo", "texto": paragrafo["texto"], "campo_texto": "trabalho",
+                       "origem": {"campo": "segmentacao.paragrafos.texto", "paragrafo_id": paragrafo["id"],
+                                  "trabalho": deepcopy(paragrafo["trabalho"]),
+                                  "original": deepcopy(paragrafo["original"])}}
+        else:
+            for unidade in contexto["unidades"]:
+                yield descricao_unidade(unidade, tipo)
 
 
 def _processamento(descricao, perfil):
@@ -584,7 +608,7 @@ def _validacao(registro):
 
 def vetorizar_contexto(contexto, *, perfil_id="e5_simetrico", opcoes=None, execucao_id=None,
                        registrado_em=None, adaptador=None, progresso=None, obter_cache=None, salvar_cache=None):
-    """Gere duas representações por unidade e uma por documento, sem sobrescrever 08."""
+    """Gere os tipos selecionados; sem seleção, preserve o contrato histórico da etapa 09."""
     from perfis_vetorizacao import carregar_perfil
     perfil = carregar_perfil(perfil_id, opcoes=opcoes)
     _json(perfil)
@@ -808,7 +832,7 @@ def _validar_vetorizacao(registro, profundidade=0):
     if "derivacao_execucao" in registro:
         return _validar_derivado(registro, perfil, proc, cfg, por_id, profundidade)
     descricoes = list(_descricoes(contexto, perfil, preparacao))
-    _exigir(len(descricoes) == len(representacoes), "Cobertura das unidades/documento incompleta.")
+    _exigir(len(descricoes) == len(representacoes), "Cobertura dos tipos de representação selecionados incompleta.")
     usados = set()
     for ordem, (representacao, descricao) in enumerate(zip(representacoes, descricoes)):
         _exigir(type(representacao) is dict and set(representacao) == {"id", "ordem", "tipo", "origem", "texto_sha256",

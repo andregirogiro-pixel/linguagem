@@ -213,6 +213,49 @@ class ColabAppTests(unittest.TestCase):
         bare_page = self.client.get(response.headers["Location"]).get_data(as_text=True)
         self.assertNotIn("Gerar notebook para o Colab", bare_page)
 
+    def test_json_and_form_export_preserve_only_the_selected_types(self):
+        document_id, context = self.fixture.source(normalizar=True)
+        before = self.snapshot()
+        for as_form in (False, True):
+            with self.subTest(as_form=as_form):
+                if as_form:
+                    response = self.client.post(f"/envios/{document_id}/notebook-colab.ipynb", data=MultiDict([
+                        ("contexto_execucao_id", context["execucao_id"]),
+                        ("tipos_representacao_presentes", "1"),
+                        ("tipos_representacao", "periodo"),
+                        ("tipos_representacao", "paragrafo"),
+                    ]))
+                else:
+                    response = self.export(document_id, opcoes={"tipos_representacao": ["periodo", "paragrafo"]})
+                _, capsule = self.capsule(response)
+                self.assertEqual(capsule["contexto"], context)
+                self.assertEqual(capsule["perfil_exportado"]["tipos_representacao"], ["paragrafo", "periodo"])
+                self.assertEqual(set(capsule["opcoes_solicitadas"]["tipos_representacao"]), {"paragrafo", "periodo"})
+                # O núcleo entregue no notebook deve executar a mesma escolha.
+                from fixtures_vetorizacao import AdaptadorControlado
+                from vetorizacao import vetorizar_contexto
+                resultado = vetorizar_contexto(
+                    capsule["contexto"], opcoes=capsule["opcoes_solicitadas"],
+                    adaptador=AdaptadorControlado(capsule["perfil_exportado"]),
+                )
+                self.assertEqual([rep["tipo"] for rep in resultado["representacoes"]], ["paragrafo"] * 2 + ["periodo"] * 5)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_empty_checkbox_selection_and_invalid_selections_cannot_export(self):
+        document_id, context = self.fixture.source()
+        path = f"/envios/{document_id}/notebook-colab.ipynb"
+        invalid = [[], None, "documento", ["documento", "documento"], ["parágrafo"], [False]]
+        with patch("app.gerar_notebook_colab") as producer:
+            for types in invalid:
+                with self.subTest(types=types):
+                    response = self.export(document_id, opcoes={"tipos_representacao": types})
+                    self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+            response = self.client.post(path, data={
+                "contexto_execucao_id": context["execucao_id"], "tipos_representacao_presentes": "1",
+            })
+            self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        producer.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

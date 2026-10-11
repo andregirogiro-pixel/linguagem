@@ -8,8 +8,8 @@ vocabulário do documento, relações sintáticas e entidades nomeadas. Regras
 versionadas acrescentam ocorrências de orações, negação, tempo, modalidade
 e conectores, com evidências e propostas de alcance. Cada período recebe
 uma unidade de contexto, com o foco, os vizinhos selecionados e as referências
-às anotações existentes. A etapa 09 permite gerar embeddings do período,
-da janela contextual e do documento, localmente ou no Colab, com modelo
+às anotações existentes. A etapa 09 permite escolher embeddings do relato
+inteiro, dos parágrafos, das janelas contextuais e dos períodos, localmente ou no Colab, com modelo
 e perfil configuráveis, sem substituir os resultados anteriores.
 Os registros JSON contêm versões, hashes SHA-256,
 metadados e posições que apontam até o original.
@@ -199,10 +199,20 @@ a [especificação consolidada](docs/especificacao_etapa08.md), o
 históricos com [preservação literal](examples/unidades_contexto_literal.json) e
 [normalização opcional de CRLF](examples/unidades_contexto_normalizada.json).
 
-## Vetorizar períodos, contexto e documento
+## Escolher o que vetorizar
 
-Escolha uma execução contextual pronta e solicite a vetorização no painel
-da etapa 09. O perfil inicial usa `intfloat/multilingual-e5-large` para
+Escolha uma execução contextual pronta e, na etapa 09, marque **Relato inteiro**,
+**Parágrafos**, **Contextos** e/ou **Períodos**. A tela começa com somente
+**Relato inteiro** marcado. Cada opção é independente; pelo menos uma precisa
+ser escolhida. Só os tipos selecionados são gerados e salvos, inclusive quando
+você exporta o notebook para o Colab. Contextos são as janelas definidas na
+etapa anterior; parágrafos seguem a segmentação do texto.
+
+Os resultados aparecem agrupados por tipo, e cada execução guarda sua seleção
+no histórico. Uma representação longa pode conter fragmentos técnicos e um
+vetor agregado: esses artefatos ficam nos detalhes da representação.
+
+O perfil inicial usa `intfloat/multilingual-e5-large` para
 comparação entre textos; CPU é o dispositivo inicial. Modelo, perfil,
 dispositivo e políticas são configuráveis. GPUs são opcionais, e os
 experimentos de modelos diferentes conservam seus próprios resultados.

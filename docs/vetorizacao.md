@@ -123,6 +123,7 @@ Exemplo de opções avançadas, compatível com o perfil inicial:
 | `fragmentacao` | `sem_sobreposicao` ou `erro`. |
 | `agregacao` | `media_ponderada_tokens` ou `media_simples`. |
 | `texto_documento` | `trabalho` ou `original`. |
+| `tipos_representacao` | Lista não vazia, sem repetição, de `documento`, `paragrafo`, `contextual` e/ou `periodo`. |
 
 `limite_tokens` omitido é resolvido pelo adaptador. Um valor explícito
 precisa respeitar sua capacidade. Outro modelo ou tokenizador exige revisão
@@ -143,13 +144,39 @@ efetiva registra o modelo realmente carregado, não somente a solicitação.
 
 ## Textos e coordenadas
 
-Para cada unidade contextual são criadas duas representações:
+Na interface, quatro opções independentes controlam o que será gerado:
+**Relato inteiro**, **Parágrafos**, **Contextos** e **Períodos**. O padrão da
+tela é somente relato inteiro. A seleção vale para geração local e exportação
+do notebook Colab; nenhuma representação de um tipo desmarcado é calculada.
 
 | Tipo | Campo selecionado | Referências |
 | --- | --- | --- |
 | `periodo` | `unidade.foco.texto` | Unidade e período foco. |
 | `contextual` | `unidade.janela.texto` | Unidade e identidade lógica da janela. |
 | `documento` | Texto integral de trabalho na preparação. | Documento e preparação. |
+| `paragrafo` | Recorte exato de cada parágrafo da segmentação. | ID do parágrafo, segmentação e intervalos de trabalho/original. |
+
+Contexto é a janela de períodos vizinhos definida na etapa 08; parágrafo é
+uma unidade da segmentação. Os dois podem ter textos iguais em alguns casos,
+mas mantêm referências próprias. Os resultados da interface são agrupados
+por tipo, com artefatos de fragmentação e agregação nos detalhes técnicos.
+
+Para API e CLI, forneça a seleção nas opções do perfil, por exemplo:
+
+```json
+{"tipos_representacao": ["documento", "periodo"]}
+```
+
+A ordem da seleção é normalizada para `documento`, `paragrafo`, `contextual`,
+`periodo`. Lista vazia, tipo desconhecido ou repetido gera erro. A execução
+salva a seleção no perfil e sua configuração, sem alterar a identidade do
+espaço vetorial só por escolher outras unidades. O JSON continua contendo
+listas `representacoes` e `artefatos`, com cada representação identificada
+por `tipo` e com a origem exata.
+
+Clientes antigos que omitem `tipos_representacao` conservam a geração
+histórica de período e contexto por unidade, mais o documento integral.
+Registros anteriores permanecem válidos e não são modificados.
 
 Há somente uma representação de documento por execução. O documento não
 é reconstruído pela concatenação dos períodos: isso poderia perder
@@ -172,7 +199,7 @@ continuam sendo conferidos separadamente.
 
 ## Entradas longas, fragmentação e agregação
 
-Período, janela e documento são enviados integralmente quando couberem no
+Período, parágrafo, janela e documento são enviados integralmente quando couberem no
 limite efetivo selecionado. Um modelo com janela maior não herda o limite
 do E5. A contagem inclui prefixo e tokens especiais; o núcleo não permite
 truncamento silencioso pelo encoder.
