@@ -48,9 +48,12 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe app.py
 ```
 
-Abra <http://127.0.0.1:5001> no navegador do mesmo computador, cole o texto e
-clique em **Registrar texto**. A confirmação mostra o identificador do registro
-e a data em horário de Brasília. Atualizar a confirmação não repete o envio.
+Abra <http://127.0.0.1:5001> no navegador do mesmo computador e cole o texto.
+Escolha **Por etapas** para registrar e avançar manualmente ou **Gerar tudo**
+para executar a análise completa e abrir **Vetores**. Ali, escolha quais
+representações gerar: relato inteiro, parágrafos, contextos ou períodos.
+A confirmação mostra o identificador do registro e a data em horário de
+Brasília. Atualizar a confirmação não repete o envio.
 Mantenha o terminal aberto durante o uso e pressione `Ctrl+C` para encerrar.
 
 ## Navegar pelas etapas
@@ -59,6 +62,13 @@ Depois de registrar um texto, use as abas **Texto**, **Preparação**,
 **Segmentação**, **Morfologia**, **Sintaxe**, **Regras**, **Contexto** e
 **Vetores**. Uma etapa aparece por vez, com seus formulários, resultados e
 histórico. Etapas pendentes indicam o que precisa ser concluído antes.
+
+**Gerar tudo** encadeia preparação, segmentação, morfologia, sintaxe, regras
+e contexto, salvando cada etapa concluída. Usa a configuração inicial de
+contexto: até um período anterior e um seguinte, dentro do mesmo parágrafo.
+Os vetores são gerados depois que você escolhe as representações e a finalidade
+em **Vetores**. Se uma etapa falhar, a página abre nessa etapa com o diagnóstico;
+os resultados anteriores continuam disponíveis para consulta e continuação manual.
 
 As setas esquerda/direita, Home e End mudam de aba; Tab entra no conteúdo.
 A barra facilita alternar entre as etapas durante a leitura. O endereço

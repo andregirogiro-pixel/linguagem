@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='etapas.js') }}" defer></script>
     <script src="{{ url_for('static', filename='vetorizacao.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='geracao.js') }}" defer></script>
   </head>
   <body>
     <div class="page">
@@ -29,6 +30,15 @@
           <p class="intro-description">Registre seu texto, separe suas unidades e consulte sugestões de morfologia, sintaxe, entidades e regras linguísticas, preservando o conteúdo original.</p>
           {% endif %}
         </div>
+
+        {% if generation_error|default(none) %}
+        <section class="notice notice-error generation-notice" role="alert" aria-labelledby="generation-error-title">
+          <h2 id="generation-error-title">Não foi possível concluir a análise</h2>
+          {% if generation_stage|default(none) %}<p><strong>Etapa: {{ generation_stage }}.</strong></p>{% endif %}
+          <p>{{ generation_error }}</p>
+          <p>As etapas concluídas estão salvas. Consulte os resultados e continue por etapas.</p>
+        </section>
+        {% endif %}
 
         {% if record %}
         <section class="notice notice-success" role="status" aria-live="polite">
@@ -897,7 +907,7 @@
           <p class="notice notice-error" id="form-error" role="alert">{{ error }}</p>
           {% endif %}
 
-          <form method="post" action="{{ url_for('submit_text') }}" accept-charset="UTF-8">
+          <form method="post" action="{{ url_for('submit_text') }}" accept-charset="UTF-8" data-generation-form>
             <label for="content">Seu texto</label>
             <textarea id="content" name="content" rows="12" placeholder="Escreva aqui ou cole seu texto…" required aria-describedby="content-help{% if error %} form-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
 {{ content }}</textarea>
@@ -911,8 +921,13 @@
             </details>
             <div class="form-footer">
               <p id="content-help">Você pode manter parágrafos, espaços e pontuação.</p>
-              <button type="submit">Registrar texto <span aria-hidden="true">→</span></button>
+              <div class="generation-actions" data-generation-actions>
+                <button type="submit" class="generation-step-button" data-generation-mode="steps" aria-describedby="generation-help">Por etapas</button>
+                <button type="submit" formaction="{{ url_for('submit_full_text') }}" data-generation-mode="full" aria-describedby="generation-help">Gerar tudo <span aria-hidden="true">→</span></button>
+              </div>
             </div>
+            <p id="generation-help" class="option-help"><strong>Por etapas</strong> registra o texto para você avançar uma etapa de cada vez. <strong>Gerar tudo</strong> completa a análise, da preparação ao contexto, e abre a etapa Vetores para você escolher o que vetorizar.</p>
+            <p class="generation-progress" role="status" aria-live="polite" data-generation-status hidden></p>
           </form>
         </section>
       </main>

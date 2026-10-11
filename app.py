@@ -66,6 +66,11 @@ VECTOR_PROFILES = [
     {"id": "e5_conteudo", "nome": "Conteúdo para recuperação", "descricao": "Conteúdo para um índice compatível."},
     {"id": "e5_legado", "nome": "Compatibilidade histórica", "descricao": "Preparação histórica explícita, com cobertura declarada."},
 ]
+FULL_ANALYSIS_STAGE_NAMES = {
+    "segmentacao": "Segmentação", "morfologia": "Morfologia",
+    "sintaxe": "Sintaxe e entidades", "regras": "Regras linguísticas",
+    "contexto": "Unidades de contexto",
+}
 
 
 def connect_database(database):
@@ -426,6 +431,33 @@ def load_vector_context(connection, document_id, context_execution_id):
     return contextualized
 
 
+def generate_full_analysis(connection, document, prepared):
+    """Encadeia as etapas pela origem exata e preserva cada execução concluída."""
+    selection = {"preparacao_id": prepared["preparacao_id"]}
+    stages = (
+        ("segmentacao", save_segmentation, "segmentacao_id", "segmentacao_id"),
+        ("morfologia", save_annotation, "anotacao_id", "anotacao_id"),
+        ("sintaxe", save_analysis, "analise_id", "analise_id"),
+        ("regras", save_rule_run, "execucao_id", "execucao_id"),
+        ("contexto", save_context_run, "execucao_id", "contexto_execucao_id"),
+    )
+    source = prepared
+    for stage, save, identifier, parameter in stages:
+        try:
+            source = save(connection, document, source)
+            connection.commit()
+        except SOURCE_ERRORS as error:
+            connection.rollback()
+            return selection, stage, str(error)
+        except sqlite3.Error:
+            connection.rollback()
+            return selection, stage, "Não foi possível salvar esta etapa no banco. As etapas concluídas continuam disponíveis."
+        selection[parameter] = source[identifier]
+        if stage == "regras" and source["validacao"]["pronto_para_etapa_08"] is not True:
+            return selection, stage, "As regras foram salvas com diagnóstico incompleto. Confira essa etapa antes de construir o contexto."
+    return selection, None, None
+
+
 def create_app(config=None):
     app = Flask(__name__)
     app.config.from_mapping(
@@ -554,6 +586,20 @@ def create_app(config=None):
     def index():
         return render_template("index.html", content="", error=None, record=None)
 
+    def register_submission(content, normalizar_crlf):
+        created_at = datetime.now(timezone.utc).isoformat()
+        with closing(connect_database(app.config["DATABASE"])) as connection:
+            cursor = connection.execute(
+                "INSERT INTO submissions (content, created_at) VALUES (?, ?)",
+                (content, created_at),
+            )
+            document = {"id": cursor.lastrowid, "content": content, "created_at": created_at}
+            prepared = save_preparation(
+                connection, document, normalizar_crlf=normalizar_crlf, registrado_em=created_at,
+            )
+            connection.commit()
+        return document, prepared
+
     @app.post("/envios")
     def submit_text():
         content = request.form.get("content", "")
@@ -563,24 +609,40 @@ def create_app(config=None):
                 error="Digite um texto antes de registrar.", record=None,
             ), 400
 
-        created_at = datetime.now(timezone.utc).isoformat()
         try:
-            normalizar_crlf = form_crlf_option()
-            with closing(connect_database(app.config["DATABASE"])) as connection:
-                cursor = connection.execute(
-                    "INSERT INTO submissions (content, created_at) VALUES (?, ?)",
-                    (content, created_at),
-                )
-                record_id = cursor.lastrowid
-                save_preparation(
-                    connection, {"id": record_id, "content": content, "created_at": created_at},
-                    normalizar_crlf=normalizar_crlf,
-                    registrado_em=created_at,
-                )
-                connection.commit()
+            document, _ = register_submission(content, form_crlf_option())
         except ErroPreparacao as error:
             return render_template("index.html", content=content, error=str(error), record=None), 400
-        return redirect(url_for("submission", record_id=record_id), code=303)
+        return redirect(url_for("submission", record_id=document["id"]), code=303)
+
+    @app.post("/envios/completo")
+    def submit_full_text():
+        content = request.form.get("content", "")
+        if (
+            request.args or request.is_json or set(request.form) - {"content", "normalizar_crlf"}
+            or len(request.form.getlist("content")) != 1
+        ):
+            return render_template(
+                "index.html", content=content, record=None,
+                error="Envie um único texto e a opção de preparação para gerar a análise completa.",
+            ), 400
+        if not content.strip():
+            return render_template(
+                "index.html", content=content, record=None,
+                error="Digite um texto antes de gerar a análise completa.",
+            ), 400
+        try:
+            document, prepared = register_submission(content, form_crlf_option())
+        except ErroPreparacao as error:
+            return render_template("index.html", content=content, error=str(error), record=None), 400
+        with closing(connect_database(app.config["DATABASE"])) as connection:
+            selection, failed_stage, error = generate_full_analysis(connection, document, prepared)
+        if error is not None:
+            selection.update(geracao_erro=error, geracao_etapa=failed_stage)
+        return redirect(url_for(
+            "submission", record_id=document["id"], **selection,
+            _anchor="etapa-" + (failed_stage or "vetorizacao"),
+        ), code=303)
 
     @app.get("/envios/<int:record_id>")
     def submission(record_id):
@@ -730,6 +792,8 @@ def create_app(config=None):
         ).strftime("%d/%m/%Y às %H:%M:%S")
         return render_template(
             "index.html", content=row["content"], error=None, record=record, prepared=prepared,
+            generation_error=request.args.get("geracao_erro"),
+            generation_stage=FULL_ANALYSIS_STAGE_NAMES.get(request.args.get("geracao_etapa")),
             segmented=segmented, segmentation_history=[dict(item) for item in history],
             preparation_history=[dict(item) for item in preparation_history],
             annotated=annotated, annotation_history=[dict(item) for item in annotation_history],

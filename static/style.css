@@ -258,6 +258,12 @@ a:focus-visible {
 }
 
 .form-footer p { margin: 0; color: var(--muted); font-size: 13px; }
+.generation-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.generation-step-button { border: 1px solid var(--accent); background: #f6faf5; color: var(--accent); }
+.generation-step-button:hover { background: #e5f0e3; }
+.generation-actions button[aria-disabled="true"] { opacity: .65; cursor: wait; pointer-events: none; }
+.generation-progress { margin: 14px 0 0; color: var(--accent); font-size: 14px; font-weight: 600; }
+.generation-notice p + p { margin-top: 8px; }
 
 button {
   display: inline-flex;
@@ -391,6 +397,7 @@ button:hover { background: #1e483d; }
   .unit-counts dd { font-size: 24px; }
   .unit-counts dt { font-size: 12px; }
   .form-footer { flex-direction: column; align-items: stretch; gap: 16px; }
+  .generation-actions { flex-direction: column; }
   .notice-success { flex-wrap: wrap; gap: 10px; }
   .new-text { margin-left: 40px; }
   button { width: 100%; }
