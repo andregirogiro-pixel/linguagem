@@ -17,6 +17,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+import ssl
 import tempfile
 import threading
 from typing import Any
@@ -70,6 +71,22 @@ def _hashes(path: Path) -> dict[str, str]:
     return {"md5": md5.hexdigest(), "sha256": sha256.hexdigest()}
 
 
+def _contexto_tls() -> ssl.SSLContext:
+    """Mantém a confiança local e acrescenta as autoridades do certifi."""
+    try:
+        import certifi
+    except ImportError as exc:
+        raise ModeloConstituintesIndisponivel(
+            "Certifi é necessário para baixar os pesos com HTTPS verificado. "
+            "Instale requirements-constituintes.txt."
+        ) from exc
+    # A criação padrão respeita SSL_CERT_FILE/SSL_CERT_DIR e a confiança do
+    # sistema. Acrescentar o bundle mantém também autoridades locais de proxies.
+    contexto = ssl.create_default_context()
+    contexto.load_verify_locations(cafile=certifi.where())
+    return contexto
+
+
 def _baixar_verificado(url: str, destino: Path, algoritmo: str, esperado: str) -> None:
     """Baixa para arquivo temporário e só publica o artefato após verificá-lo."""
     if destino.is_file() and _hashes(destino)[algoritmo] == esperado:
@@ -77,9 +94,10 @@ def _baixar_verificado(url: str, destino: Path, algoritmo: str, esperado: str) -
     destino.parent.mkdir(parents=True, exist_ok=True)
     temporario: Path | None = None
     try:
+        contexto = _contexto_tls()
         with tempfile.NamedTemporaryFile(dir=destino.parent, delete=False) as arquivo:
             temporario = Path(arquivo.name)
-            with urllib.request.urlopen(url, timeout=60) as resposta:
+            with urllib.request.urlopen(url, timeout=60, context=contexto) as resposta:
                 for bloco in iter(lambda: resposta.read(1024 * 1024), b""):
                     arquivo.write(bloco)
         if _hashes(temporario)[algoritmo] != esperado:
@@ -88,6 +106,15 @@ def _baixar_verificado(url: str, destino: Path, algoritmo: str, esperado: str) -
             )
         temporario.replace(destino)
     except (OSError, urllib.error.URLError) as exc:
+        motivo = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        if isinstance(motivo, ssl.SSLCertVerificationError):
+            raise ModeloConstituintesIndisponivel(
+                f"Não foi possível verificar o certificado HTTPS ao baixar {url}. "
+                "Atualize o pacote certifi neste ambiente Python. Se a rede usa "
+                "uma autoridade certificadora própria, configure SSL_CERT_FILE "
+                "com o arquivo de certificados confiáveis fornecido pela rede "
+                "e execute --baixar novamente."
+            ) from exc
         raise ModeloConstituintesIndisponivel(
             f"Não foi possível baixar {url}: {exc}. "
             "Confira o acesso de rede e execute --baixar novamente."

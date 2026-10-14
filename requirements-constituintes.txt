@@ -1,7 +1,8 @@
 # Extensão opcional para constituintes; instalar após requirements.txt.
-# Na CPU, instalar primeiro pelo índice oficial para evitar dependências CUDA:
-# python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
-# Depois: python -m pip install -r requirements-constituintes.txt
+# Reutiliza o Torch instalado, respeitando o mínimo declarado pelo Stanza.
+# Mac Intel: Torch 2.2.2 usa a ABI NumPy 1.x (Python até 3.12).
+# Instalação: python -m pip install -r requirements-constituintes.txt
 # Pesos: python modelo_constituintes.py --baixar --verificar
-torch==2.10.0
 stanza==1.11.0
+certifi==2026.7.22
+numpy>=1.26.4,<2; platform_system == "Darwin" and platform_machine == "x86_64"

@@ -10,10 +10,12 @@ import hashlib
 import io
 import os
 from pathlib import Path
+import ssl
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+import urllib.error
 
 import modelo_constituintes as modulo
 from modelo_constituintes import (
@@ -120,6 +122,50 @@ class AdaptadorConstituintesTests(unittest.TestCase):
                 modulo._baixar_verificado("https://example.org/modelo", destino, "sha256", esperado)
         self.assertEqual(destino.read_bytes(), b"anterior")
         self.assertEqual(list(self.pasta.iterdir()), [destino])
+
+    def test_download_acrescenta_certifi_sem_substituir_confianca_padrao(self):
+        destino = self.pasta / "arquivo.pt"
+        dados = b"arquivo com checksum valido"
+        esperado = hashlib.sha256(dados).hexdigest()
+        contexto = Mock(spec=ssl.SSLContext)
+        contexto.verify_mode = ssl.CERT_REQUIRED
+        contexto.check_hostname = True
+        certifi = SimpleNamespace(where=Mock(return_value="/certifi/cacert.pem"))
+        caminho_local = "/rede/autoridades-confiaveis.pem"
+
+        def criar_contexto():
+            # Sem argumento cafile: o SSL padrão consulta as configurações locais.
+            self.assertEqual(os.environ["SSL_CERT_FILE"], caminho_local)
+            return contexto
+
+        with patch.dict(os.environ, {"SSL_CERT_FILE": caminho_local}), \
+                patch.dict("sys.modules", {"certifi": certifi}), \
+                patch.object(modulo.ssl, "create_default_context", side_effect=criar_contexto) as criar, \
+                patch("urllib.request.urlopen", return_value=io.BytesIO(dados)) as rede:
+            modulo._baixar_verificado("https://example.org/modelo", destino, "sha256", esperado)
+            self.assertEqual(os.environ["SSL_CERT_FILE"], caminho_local)
+
+        criar.assert_called_once_with()
+        contexto.load_verify_locations.assert_called_once_with(cafile="/certifi/cacert.pem")
+        self.assertEqual(contexto.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(contexto.check_hostname)
+        rede.assert_called_once_with("https://example.org/modelo", timeout=60, context=contexto)
+        self.assertEqual(destino.read_bytes(), dados)
+
+    def test_erro_tls_orienta_confianca_sem_publicar_arquivo(self):
+        destino = self.pasta / "arquivo.pt"
+        destino.write_bytes(b"anterior")
+        esperado = hashlib.sha256(b"correto").hexdigest()
+        certificado = ssl.SSLCertVerificationError(1, "certificate verify failed")
+        for erro in (certificado, urllib.error.URLError(certificado)):
+            with self.subTest(erro=type(erro).__name__), \
+                    patch("urllib.request.urlopen", side_effect=erro):
+                with self.assertRaisesRegex(
+                    ModeloConstituintesIndisponivel, "certifi.*SSL_CERT_FILE"
+                ):
+                    modulo._baixar_verificado("https://example.org/modelo", destino, "sha256", esperado)
+            self.assertEqual(destino.read_bytes(), b"anterior")
+            self.assertEqual(list(self.pasta.iterdir()), [destino])
 
     def test_pipeline_cpu_offline_preserva_contracoes_unicode_e_pontuacao(self):
         tokens = ["Ação", "do", "aluno", "(", "e\u0301", ")", "."]

@@ -27,11 +27,24 @@ nem uma classificação tradicional completa das orações.
 Na raiz do repositório, com o aplicativo encerrado:
 
 ```bash
-.venv/bin/python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
 .venv/bin/python -m pip install -r requirements-constituintes.txt
 .venv/bin/python modelo_constituintes.py --baixar --verificar
 .venv/bin/python app.py
 ```
+
+A extensão reutiliza o Torch já instalado, desde que satisfaça o requisito do
+Stanza (`torch>=1.13.0`); não exige mais Torch 2.10.0. Para Mac Intel, a última
+distribuição oficial compatível é Torch 2.2.2, com Python até 3.12. Nesse
+sistema, o manifesto também restringe NumPy à série 1.x, compatível com a ABI
+desse Torch. Não reinstale um Torch funcional apenas para preparar a extensão.
+Essa combinação (Python 3.12, Torch 2.2.2, NumPy 1.26.4, spaCy 3.8.16 e
+Stanza 1.11.0) foi verificada em ambiente isolado Linux CPU: `pip check`,
+análise portuguesa do spaCy, conversão Torch/NumPy e pré-tokenização do Stanza.
+Isso verifica a coexistência dos pacotes; a execução nativa no Mac e a
+inferência com os pesos CINTIL ainda precisam passar por `--verificar`.
+Em uma instalação Linux CPU sem Torch, pode-se preparar primeiro uma
+distribuição CPU pelo índice oficial `https://download.pytorch.org/whl/cpu`;
+isso não é necessário para um ambiente que já tenha Torch compatível.
 
 O download é explícito e não ocorre ao abrir a interface. São necessários
 o registro oficial de recursos e cinco arquivos: parser de constituintes,
@@ -47,6 +60,13 @@ instalação já preparada, sem download:
 ```bash
 .venv/bin/python modelo_constituintes.py --verificar
 ```
+
+Os downloads usam a confiança TLS padrão do Python, acrescida dos certificados
+raiz distribuídos pelo Certifi. Isso atende instalações de Python no macOS
+cuja cadeia padrão não reconhece as autoridades públicas. A validação de
+certificados e os checksums continuam obrigatórios. Em uma rede com autoridade
+certificadora própria, `SSL_CERT_FILE` pode apontar para o arquivo PEM fornecido
+pelo administrador; essa confiança não é descartada pelo adaptador.
 
 Os arquivos vêm de `raw.githubusercontent.com` e `huggingface.co`; downloads
 de pesos podem redirecionar para `cdn-lfs.huggingface.co` ou
