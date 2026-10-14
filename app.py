@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+from threading import RLock
 from zoneinfo import ZoneInfo
 
 from flask import Flask, Response, abort, redirect, render_template, request, url_for
@@ -55,10 +56,16 @@ from trabalhos_vetorizacao import (
     obter_trabalho,
     retomar_trabalho,
 )
+from hierarquia_sintatica import (
+    ErroHierarquia, ErroModelo as ErroHierarquiaModelo,
+    ErroAlinhamento as ErroHierarquiaAlinhamento,
+    ErroLimite as ErroHierarquiaLimite,
+    construir_hierarquia, validar_hierarquia,
+)
 
 
 BASE = Path(__file__).resolve().parent
-SOURCE_ERRORS = (ErroPreparacao, ErroSegmentacao, ErroAnotacao, ErroAnalise, ErroRegras, ErroContexto)
+SOURCE_ERRORS = (ErroPreparacao, ErroSegmentacao, ErroAnotacao, ErroAnalise, ErroRegras, ErroContexto, ErroHierarquia)
 VECTOR_ERRORS = (ErroVetorizacao, ErroPersistenciaVetores, ErroTrabalhoVetorizacao, ErroPerfil)
 VECTOR_PROFILES = [
     {"id": "e5_simetrico", "nome": "Comparação entre textos", "descricao": "Perfil simétrico E5 de referência."},
@@ -168,9 +175,13 @@ def latest_segmentation(connection, document, preparation_id=None, segmentation_
     return segmented
 
 
-def save_annotation(connection, document, segmented, **options):
+def save_annotation(connection, document, segmented, *, resultado=None, **options):
     """Acrescenta anotações da segmentação escolhida, sem substituir o histórico."""
-    annotated = anotar_segmentacao(segmented, **options)
+    annotated = anotar_segmentacao(segmented, **options) if resultado is None else resultado
+    if resultado is not None:
+        validar_anotacao(annotated)
+        if annotated["segmentacao"] != segmented or annotated["documento_id"] != document["id"]:
+            raise ErroAnotacao("A anotação não corresponde à origem selecionada.")
     connection.execute(
         """INSERT INTO annotations
            (annotation_id, segmentation_id, submission_id, registered_at, record_json)
@@ -213,9 +224,13 @@ def latest_annotation(connection, document, segmentation_id=None, annotation_id=
     return annotated
 
 
-def save_analysis(connection, document, annotated, **options):
+def save_analysis(connection, document, annotated, *, resultado=None, **options):
     """Acrescenta sintaxe e entidades da anotação escolhida, preservando as versões anteriores."""
-    analyzed = analisar_sintaxe_entidades(annotated, **options)
+    analyzed = analisar_sintaxe_entidades(annotated, **options) if resultado is None else resultado
+    if resultado is not None:
+        validar_analise_sintaxe_entidades(analyzed)
+        if analyzed["anotacao"] != annotated or analyzed["documento_id"] != document["id"]:
+            raise ErroAnalise("A análise não corresponde à origem selecionada.")
     connection.execute(
         """INSERT INTO analyses
            (analysis_id, annotation_id, submission_id, registered_at, record_json)
@@ -256,6 +271,47 @@ def latest_analysis(connection, document, annotation_id=None, analysis_id=None):
     ):
         raise ErroAnalise("A análise não corresponde à anotação original armazenada.")
     return analyzed
+
+
+def save_hierarchy(connection, document, analyzed, period_id, *, adapter=None, resultado=None):
+    hierarchy = construir_hierarquia(analyzed, period_id, adaptador=adapter) if resultado is None else resultado
+    validar_hierarquia(hierarchy)
+    if hierarchy["analise"] != analyzed or hierarchy["documento_id"] != document["id"]:
+        raise ErroHierarquia("A hierarquia não corresponde à análise selecionada.")
+    connection.execute(
+        """INSERT INTO hierarchy_runs
+           (hierarchy_id, analysis_id, period_id, submission_id, registered_at, record_json)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (hierarchy["hierarquia_id"], analyzed["analise_id"], period_id, document["id"],
+         hierarchy["registrado_em"], json.dumps(hierarchy, ensure_ascii=False, allow_nan=False)),
+    )
+    return hierarchy
+
+
+def latest_hierarchy(connection, document, *, hierarchy_id=None, analysis_id=None, period_id=None):
+    sql = "SELECT * FROM hierarchy_runs WHERE submission_id = ?"
+    parameters = [document["id"]]
+    for column, value in (("hierarchy_id", hierarchy_id), ("analysis_id", analysis_id), ("period_id", period_id)):
+        if value is not None:
+            sql += f" AND {column} = ?"
+            parameters.append(value)
+    row = connection.execute(sql + " ORDER BY id DESC LIMIT 1", parameters).fetchone()
+    if row is None:
+        return None
+    try:
+        hierarchy = json.loads(row["record_json"])
+    except (ValueError, TypeError) as error:
+        raise ErroHierarquia("O JSON da hierarquia armazenada é inválido.") from error
+    validar_hierarquia(hierarchy)
+    analyzed = latest_analysis(connection, document, analysis_id=row["analysis_id"])
+    if (hierarchy["documento_id"] != document["id"]
+            or hierarchy["hierarquia_id"] != row["hierarchy_id"]
+            or hierarchy["analise_id"] != row["analysis_id"]
+            or hierarchy["periodo_id"] != row["period_id"]
+            or hierarchy["registrado_em"] != row["registered_at"]
+            or hierarchy["analise"] != analyzed):
+        raise ErroHierarquia("A hierarquia não corresponde à origem persistida.")
+    return hierarchy
 
 
 def save_rule_run(connection, document, analyzed, **options):
@@ -375,9 +431,11 @@ def create_app(config=None):
         VECTORS_AUTO_START=True,
         VECTORS_MAX_WORKERS=1,
         VECTORS_ADAPTER_FACTORY=None,
+        HIERARCHY_ADAPTER_FACTORY=None,
     )
     if config:
         app.config.update(config)
+    hierarchy_lock = RLock()
 
     @app.template_filter("horario_brasilia")
     def display_time(value):
@@ -473,6 +531,20 @@ def create_app(config=None):
         connection.execute(
             "CREATE INDEX IF NOT EXISTS context_runs_rules ON context_runs (submission_id, rule_execution_id, id)"
         )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS hierarchy_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hierarchy_id TEXT NOT NULL UNIQUE,
+                analysis_id TEXT NOT NULL REFERENCES analyses(analysis_id),
+                period_id TEXT NOT NULL,
+                submission_id INTEGER NOT NULL REFERENCES submissions(id),
+                registered_at TEXT NOT NULL,
+                record_json TEXT NOT NULL
+            )"""
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS hierarchy_runs_source ON hierarchy_runs (submission_id, analysis_id, period_id, id)"
+        )
         inicializar_vetores(connection)
         connection.commit()
 
@@ -537,6 +609,24 @@ def create_app(config=None):
                 segmentation_id = request.args.get("segmentacao_id")
                 annotation_id = request.args.get("anotacao_id")
                 analysis_id = request.args.get("analise_id")
+                hierarchy_id = request.args.get("hierarquia_id")
+                selected_hierarchy = None
+                if hierarchy_id is not None:
+                    if len(request.args.getlist("hierarquia_id")) != 1 or not hierarchy_id.strip():
+                        return {"erro": "Selecione uma única hierarquia."}, 400
+                    selected_hierarchy = latest_hierarchy(connection, row, hierarchy_id=hierarchy_id)
+                    if selected_hierarchy is None:
+                        abort(404)
+                    for field in ("preparacao_id", "segmentacao_id", "anotacao_id", "analise_id"):
+                        if field in request.args and (
+                            len(request.args.getlist(field)) != 1
+                            or request.args[field] != selected_hierarchy[field]
+                        ):
+                            return {"erro": "A hierarquia pertence a outra origem de análise."}, 400
+                    preparation_id = selected_hierarchy["preparacao_id"]
+                    segmentation_id = selected_hierarchy["segmentacao_id"]
+                    annotation_id = selected_hierarchy["anotacao_id"]
+                    analysis_id = selected_hierarchy["analise_id"]
                 execution_id = request.args.get("execucao_id")
                 context_execution_id = request.args.get("contexto_execucao_id")
                 vector_execution_id = request.args.get("vetorizacao_execucao_id")
@@ -634,6 +724,20 @@ def create_app(config=None):
                     vectorized = obter_vetorizacao(connection, record_id, execucao_id=vector_job["execucao_id"])
                     if vectorized is None or vectorized["contexto"] != contextualized:
                         raise ErroPersistenciaVetores("A vetorização não corresponde ao contexto armazenado selecionado.")
+                if selected_hierarchy is not None and selected_hierarchy["analise"] != analyzed:
+                    return {"erro": "A hierarquia não corresponde à análise exibida."}, 400
+                hierarchy_history = connection.execute(
+                    """SELECT hierarchy_id AS hierarquia_id, period_id AS periodo_id,
+                              registered_at AS registrado_em
+                       FROM hierarchy_runs WHERE submission_id = ? AND analysis_id = ? ORDER BY id DESC""",
+                    (record_id, analyzed["analise_id"]),
+                ).fetchall() if analyzed else []
+                hierarchy_data = {selected_hierarchy["periodo_id"]: selected_hierarchy} if selected_hierarchy else {}
+                for item in hierarchy_history:
+                    if item["periodo_id"] not in hierarchy_data:
+                        hierarchy_data[item["periodo_id"]] = latest_hierarchy(
+                            connection, row, hierarchy_id=item["hierarquia_id"],
+                        )
                 context_history = connection.execute(
                     """SELECT id, execution_id AS contexto_execucao_id, registered_at AS registrado_em
                        FROM context_runs WHERE submission_id = ? AND rule_execution_id = ? ORDER BY id DESC""",
@@ -679,7 +783,116 @@ def create_app(config=None):
             contextualized=contextualized, context_history=[dict(item) for item in context_history],
             vector_job=vector_job, vectorized=vectorized, vector_history=vector_history,
             vector_profiles=VECTOR_PROFILES,
+            hierarchy_data=hierarchy_data, hierarchy_history=[dict(item) for item in hierarchy_history],
         )
+
+    @app.post("/envios/<int:record_id>/hierarquias")
+    def hierarchy_submission(record_id):
+        allowed = {"segmentacao_id", "periodo_id", "anotacao_id", "analise_id", "regenerar"}
+        if request.is_json:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict) or payload.keys() - allowed:
+                return {"erro": "Envie segmentacao_id, periodo_id e, opcionalmente, anotacao_id, analise_id e regenerar."}, 400
+        else:
+            if set(request.form) - allowed or any(len(request.form.getlist(k)) != 1 for k in request.form):
+                return {"erro": "Selecione uma única origem para a hierarquia."}, 400
+            payload = request.form.to_dict()
+            if "regenerar" in payload:
+                if payload["regenerar"] != "true":
+                    return {"erro": "regenerar deve ser true."}, 400
+                payload["regenerar"] = True
+        for field in ("segmentacao_id", "periodo_id"):
+            if not isinstance(payload.get(field), str) or not payload[field].strip():
+                return {"erro": f"{field} deve ser uma string não vazia."}, 400
+        for field in ("anotacao_id", "analise_id"):
+            if field in payload and (not isinstance(payload[field], str) or not payload[field].strip()):
+                return {"erro": f"{field} deve ser uma string não vazia."}, 400
+        if type(payload.get("regenerar", False)) is not bool:
+            return {"erro": "regenerar deve ser booleano."}, 400
+        try:
+            with hierarchy_lock, closing(connect_database(app.config["DATABASE"])) as connection:
+                document = connection.execute("SELECT * FROM submissions WHERE id = ?", (record_id,)).fetchone()
+                if document is None:
+                    abort(404)
+                segmented = latest_segmentation(connection, document, segmentation_id=payload["segmentacao_id"])
+                if segmented is None:
+                    return {"erro": "Segmentação não encontrada neste documento."}, 404
+                if not any(p["id"] == payload["periodo_id"] for p in segmented["periodos"]):
+                    return {"erro": "O período não pertence à segmentação selecionada."}, 404
+                new_annotation = False
+                new_analysis = False
+                if "analise_id" in payload:
+                    analyzed = latest_analysis(connection, document, analysis_id=payload["analise_id"])
+                    if analyzed is None:
+                        return {"erro": "Análise não encontrada neste documento."}, 404
+                    if analyzed["segmentacao_id"] != segmented["segmentacao_id"]:
+                        return {"erro": "A análise pertence a outra segmentação."}, 409
+                    if "anotacao_id" in payload and analyzed["anotacao_id"] != payload["anotacao_id"]:
+                        return {"erro": "A análise pertence a outra anotação."}, 409
+                else:
+                    annotated = latest_annotation(
+                        connection, document, segmentation_id=segmented["segmentacao_id"],
+                        annotation_id=payload.get("anotacao_id"),
+                    )
+                    if annotated is None and "anotacao_id" in payload:
+                        return {"erro": "Anotação não encontrada nesta segmentação."}, 404
+                    if annotated is None:
+                        annotated = anotar_segmentacao(segmented)
+                        new_annotation = True
+                    analyzed = latest_analysis(connection, document, annotation_id=annotated["anotacao_id"])
+                    if analyzed is None:
+                        analyzed = analisar_sintaxe_entidades(annotated)
+                        new_analysis = True
+                hierarchy = None if payload.get("regenerar", False) else latest_hierarchy(
+                    connection, document, analysis_id=analyzed["analise_id"], period_id=payload["periodo_id"],
+                )
+                status = 200 if hierarchy is not None else 201
+                if hierarchy is None:
+                    factory = app.config["HIERARCHY_ADAPTER_FACTORY"]
+                    # Inferência ocorre antes de iniciar a transação de escrita.
+                    # A inicialização de modelos pode demorar; outras abas e
+                    # documentos continuam livres para gravar no SQLite.
+                    hierarchy = construir_hierarquia(
+                        analyzed, payload["periodo_id"], adaptador=factory() if factory else None,
+                    )
+                    if new_annotation:
+                        save_annotation(connection, document, segmented, resultado=annotated)
+                    if new_analysis:
+                        save_analysis(connection, document, annotated, resultado=analyzed)
+                    save_hierarchy(connection, document, analyzed, payload["periodo_id"], resultado=hierarchy)
+                connection.commit()
+        except (ErroHierarquiaModelo, ErroModelo, ErroAnaliseModelo) as error:
+            return {"erro": str(error)}, 503
+        except (ErroHierarquiaAlinhamento, ErroAlinhamento, ErroAnaliseAlinhamento) as error:
+            return {"erro": str(error)}, 422
+        except (ErroHierarquiaLimite, ErroLimite, ErroAnaliseLimite) as error:
+            return {"erro": str(error)}, 413
+        except SOURCE_ERRORS as error:
+            return {"erro": str(error)}, 409
+        except sqlite3.IntegrityError:
+            return {"erro": "Não foi possível registrar a hierarquia para esta origem."}, 409
+        if request.is_json:
+            return Response(json.dumps(hierarchy, ensure_ascii=False, allow_nan=False), status=status, mimetype="application/json")
+        return redirect(url_for(
+            "submission", record_id=record_id, hierarquia_id=hierarchy["hierarquia_id"], _anchor="etapa-segmentacao",
+        ), code=303)
+
+    @app.get("/envios/<int:record_id>/hierarquia.json")
+    def hierarchy_json(record_id):
+        hierarchy_id = request.args.get("hierarquia_id")
+        if set(request.args) != {"hierarquia_id"} or len(request.args.getlist("hierarquia_id")) != 1 or not hierarchy_id.strip():
+            return {"erro": "Selecione uma única hierarquia_id para exportar."}, 400
+        try:
+            with closing(connect_database(app.config["DATABASE"])) as connection:
+                document = connection.execute("SELECT * FROM submissions WHERE id = ?", (record_id,)).fetchone()
+                if document is None:
+                    abort(404)
+                hierarchy = latest_hierarchy(connection, document, hierarchy_id=hierarchy_id)
+                if hierarchy is None:
+                    abort(404)
+        except SOURCE_ERRORS as error:
+            return {"erro": str(error)}, 409
+        return Response(json.dumps(hierarchy, ensure_ascii=False, allow_nan=False), mimetype="application/json")
 
     @app.post("/envios/<int:record_id>/preparacoes")
     def prepare_submission(record_id):

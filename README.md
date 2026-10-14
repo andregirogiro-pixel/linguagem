@@ -97,6 +97,13 @@ suas fronteiras podem precisar de revisão em textos ambíguos.
 Veja [uso direto, regras e API HTTP](docs/segmentacao.md) e o
 [exemplo de segmentação](examples/segmentacao.json).
 
+A aba também oferece navegação expansível por **parágrafos → períodos →
+orações → constituintes → palavras**, preservando a quantidade de parágrafos
+do texto. A análise de constituintes requer a extensão local Stanza e o modelo
+português CINTIL, preparados explicitamente; a segmentação básica continua
+disponível sem essa extensão. Consulte a [instalação, os modelos e os limites
+da análise estrutural](docs/hierarquia_sintatica.md).
+
 ## Anotar morfologia e vocabulário
 
 Escolha uma segmentação salva e clique em **Anotar morfologia e vocabulário**.

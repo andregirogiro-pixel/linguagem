@@ -1,3 +1,84 @@
+{% macro hierarchy_morphology(features) -%}
+{% set labels = {'Gender': 'Gênero', 'Number': 'Número', 'Person': 'Pessoa', 'Tense': 'Tempo', 'Mood': 'Modo', 'VerbForm': 'Forma verbal', 'Definite': 'Definição', 'PronType': 'Tipo de pronome', 'Case': 'Caso'} %}
+{% set values = {'Masc': 'masculino', 'Fem': 'feminino', 'Sing': 'singular', 'Plur': 'plural', 'Pres': 'presente', 'Past': 'passado', 'Fut': 'futuro', 'Ind': 'indicativo', 'Sub': 'subjuntivo', 'Imp': 'imperativo', 'Fin': 'finita', 'Inf': 'infinitivo', 'Ger': 'gerúndio', 'Part': 'particípio'} %}
+{% for feature, value in features|dictsort %}{{ labels.get(feature, feature) }}: {{ values.get(value, value) }} <code>{{ feature }}={{ value }}</code>{% if not loop.last %}; {% endif %}{% endfor %}
+{%- endmacro %}
+{% macro hierarchy_tokens(token_ids, words) -%}{% for token_id in token_ids %}{{ words[token_id].texto if token_id in words else token_id }}{% if not loop.last %} {% endif %}{% else %}Não determinado{% endfor %}{%- endmacro %}
+{% macro hierarchy_word(word, in_clause=true, words={}) -%}
+<details class="hierarchy-word{% if not in_clause %} hierarchy-context-word{% endif %}">
+  <summary><span class="hierarchy-word-text">{{ word.texto }}</span> <span class="hierarchy-label">{{ word.classe or 'Classe não determinada' }}{% if not in_clause %} · contexto{% endif %}</span></summary>
+  <dl class="hierarchy-attributes">
+    <dt>Classe gramatical</dt><dd>{{ word.classe or 'Não determinada' }}{% if word.pos %} <code>{{ word.pos }}</code>{% endif %}</dd>
+    <dt>Função sintática</dt><dd>{{ word.funcao_sintatica or 'Não determinada' }}</dd>
+    <dt>Lema</dt><dd>{{ word.lema or 'Não disponível' }}</dd>
+    <dt>Morfologia</dt><dd>{% if word.morfologia %}{{ hierarchy_morphology(word.morfologia) }}{% else %}Sem atributos registrados{% endif %}</dd>
+    <dt>Dependência do modelo</dt><dd>{{ word.dependencia or 'Não disponível' }}</dd>
+    <dt>Cabeça sintática</dt><dd>{% if word.cabeca_token_id in words %}{{ words[word.cabeca_token_id].texto }} <code>{{ word.cabeca_token_id }}</code>{% else %}{{ word.cabeca_token_id or 'Raiz do período' }}{% endif %}</dd>
+    <dt>Token de origem</dt><dd>{{ word.token_id }}</dd>
+  </dl>
+</details>
+{%- endmacro %}
+{% macro hierarchy_tree(node, words, clause_tokens=[]) -%}
+{% if node.tipo == 'palavra' %}
+  {% if node.token_id in words %}{{ hierarchy_word(words[node.token_id], node.token_id in clause_tokens, words) }}{% else %}<p class="hierarchy-word-text">{{ node.texto }}</p>{% endif %}
+{% else %}
+<details class="hierarchy-constituent">
+  <summary><span class="hierarchy-node-label">{{ node.classificacao or 'Constituinte' }}</span>{% if node.rotulo %} <code>{{ node.rotulo }}</code>{% endif %} <span class="hierarchy-preview">{{ node.texto }}</span></summary>
+  {% if node.nucleo_token_ids or node.complemento_token_ids or node.modificador_token_ids %}
+  <dl class="hierarchy-attributes">
+    {% for key, label in [('nucleo_token_ids', 'Núcleo candidato (dependências)'), ('complemento_token_ids', 'Complementos candidatos (dependências)'), ('modificador_token_ids', 'Modificadores candidatos (dependências)')] if node[key] %}
+    <dt>{{ label }}</dt><dd>{% for token_id in node[key] %}{{ words[token_id].texto if token_id in words else token_id }}{% if not loop.last %}, {% endif %}{% endfor %}</dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
+  <ul class="hierarchy-tree">
+    {% for child in node.filhos %}<li>{{ hierarchy_tree(child, words, clause_tokens) }}</li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
+{%- endmacro %}
+{% macro hierarchy_clauses(clauses, words, tree, parent_id=none) -%}
+<ol class="hierarchy-clauses">
+  {% for clause in clauses if clause.pai_oracao_id == parent_id %}
+  <li>
+    <details class="hierarchy-clause">
+      <summary>Oração {{ clauses.index(clause) + 1 }} <span class="hierarchy-label">{{ clause.rotulo }}</span></summary>
+      {% for span in clause.trechos %}<p class="period-text hierarchy-clause-text">{{ span.texto }}</p>{% endfor %}
+      {% if clause.trechos|length > 1 %}<p class="hierarchy-help">Esta oração ocupa trechos descontínuos; cada trecho mantém sua posição no período.</p>{% endif %}
+      <dl class="hierarchy-attributes">
+        <dt>Núcleo verbal</dt><dd>{{ hierarchy_tokens(clause.nucleo_token_ids|default([]), words) }}</dd>
+        <dt>Grupo verbal</dt><dd>{{ hierarchy_tokens(clause.grupo_verbal_token_ids|default([]), words) }}</dd>
+        {% set connective_ids = clause.conectivo_token_ids|default(clause.conectivos_token_ids)|default([]) %}
+        {% if connective_ids %}<dt>Conectivos</dt><dd>{{ hierarchy_tokens(connective_ids, words) }}</dd>{% endif %}
+      </dl>
+      {% if clause.relacoes %}<ul class="hierarchy-relations">{% for relation in clause.relacoes %}<li>{{ {'coordenacao': 'Coordenação', 'subordinacao': 'Subordinação'}.get(relation.tipo, relation.tipo) }} com {% for target in clauses if target.id == relation.alvo_oracao_id %}oração {{ clauses.index(target) + 1 }}{% else %}oração não identificada{% endfor %}{% if relation.dependencia %} <code>{{ relation.dependencia }}</code>{% endif %}</li>{% endfor %}</ul>{% endif %}
+      <details class="hierarchy-syntax">
+        <summary>Análise sintática · sintagmas e palavras</summary>
+        <p class="hierarchy-help">A árvore completa do período preserva os encaixes entre constituintes e orações. Palavras de outras orações aparecem como contexto. Abra um constituinte para explorar seus filhos e uma palavra para consultar classe e função.</p>
+        {{ hierarchy_tree(tree, words, clause.token_ids) }}
+      </details>
+      {% if clauses|selectattr('pai_oracao_id', 'equalto', clause.id)|list %}{{ hierarchy_clauses(clauses, words, tree, clause.id) }}{% endif %}
+    </details>
+  </li>
+  {% endfor %}
+</ol>
+{%- endmacro %}
+{% macro hierarchy_result(hierarchy, record_id) -%}
+{% set words = {} %}{% for word in hierarchy.palavras %}{% set _ = words.update({word.token_id: word}) %}{% endfor %}
+<p class="hierarchy-overview"><strong>{{ hierarchy.oracoes|length }} {% if hierarchy.oracoes|length == 1 %}oração identificada{% else %}orações identificadas{% endif %}</strong> <span class="hierarchy-label">{{ hierarchy.palavras|length }} tokens no período</span></p>
+<p class="hierarchy-help">Análise estrutural gerada por modelos, sujeita a revisão. Orações coordenadas aparecem no mesmo nível; subordinadas ficam sob sua oração de referência.</p>
+{% if hierarchy.oracoes %}<h4 class="hierarchy-diagram-title">Relações entre orações</h4>{{ hierarchy_clauses(hierarchy.oracoes, words, hierarchy.arvore) }}{% else %}
+<p class="hierarchy-help">Nenhuma oração com núcleo verbal foi identificada. A árvore de constituintes continua disponível.</p>
+{{ hierarchy_tree(hierarchy.arvore, words, hierarchy.palavras|map(attribute='token_id')|list) }}
+{% endif %}
+<details class="hierarchy-method">
+  <summary>Método e limites da análise</summary>
+  <p class="hierarchy-help">Os rótulos abreviados representam categorias e dependências nativas dos modelos. A classificação gramatical e a função sintática são apresentadas separadamente. Núcleos, complementos e modificadores candidatos vêm das dependências; os encaixes da árvore vêm do modelo de constituintes. Trechos sem classificação segura permanecem sem determinação.</p>
+  {% if hierarchy.processamento.constituencia %}<dl class="hierarchy-attributes">{% for key, value in hierarchy.processamento.constituencia|dictsort if value is string or value is number %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
+  {% if hierarchy.avisos %}<ul class="hierarchy-relations">{% for warning in hierarchy.avisos %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+</details>
+<a class="download-link hierarchy-download" href="{{ url_for('hierarchy_json', record_id=record_id, hierarquia_id=hierarchy.hierarquia_id) }}">Baixar análise estrutural JSON <span aria-hidden="true">↓</span></a>
+{%- endmacro %}
 <!doctype html>
 <html lang="pt-BR">
   <head>
@@ -128,21 +209,50 @@
             </dl>
             <a class="download-link" href="{{ url_for('segmentation_json', record_id=record.id, segmentacao_id=segmented.segmentacao_id) }}">Baixar segmentação JSON <span aria-hidden="true">↓</span></a>
 
-            <h3 class="periods-heading">Períodos</h3>
-            {% if segmented.periodos %}
-            <ol class="period-list">
-              {% for periodo in segmented.periodos %}
+            <h3 class="periods-heading">Explore a estrutura do texto</h3>
+            <p class="hierarchy-help">Abra um parágrafo para ver seus períodos. Ao abrir um período, a análise de orações, sintagmas e palavras é preparada e salva para consulta.</p>
+            {% if segmented.paragrafos %}
+            <ol class="hierarchy-paragraphs">
+              {% for paragraph in segmented.paragrafos %}
               <li>
-                <p class="period-text">{{ periodo.texto }}</p>
-                <details class="period-location">
-                  <summary>Localização no texto de trabalho</summary>
-                  <p>Caracteres {{ periodo.trabalho.inicio }} a {{ periodo.trabalho.fim }}. A contagem começa em zero e o limite final é exclusivo.</p>
+                <details class="hierarchy-paragraph">
+                  <summary>Parágrafo {{ loop.index }} <span class="hierarchy-label">{{ segmented.periodos|selectattr('paragrafo_id', 'equalto', paragraph.id)|list|length }} período(s)</span></summary>
+                  <p class="period-text hierarchy-paragraph-text">{{ paragraph.texto }}</p>
+                  <ol class="hierarchy-periods">
+                    {% for periodo in segmented.periodos if periodo.paragrafo_id == paragraph.id %}
+                    {% set saved_hierarchy = (hierarchy_data|default({})).get(periodo.id) %}
+                    <li>
+                      <details class="hierarchy-period" data-hierarchy-period data-periodo-id="{{ periodo.id }}" data-segmentacao-id="{{ segmented.segmentacao_id }}" data-hierarchy-url="{{ url_for('hierarchy_submission', record_id=record.id) }}"{% if annotated|default(none) %} data-anotacao-id="{{ annotated.anotacao_id }}"{% endif %}{% if analyzed|default(none) %} data-analise-id="{{ analyzed.analise_id }}"{% endif %}{% if saved_hierarchy %} data-hierarchy-loaded="true"{% endif %}>
+                        <summary><span class="hierarchy-unit-name">Período {{ loop.index }}</span> <span class="period-text">{{ periodo.texto }}</span></summary>
+                        <details class="period-location">
+                          <summary>Localização no texto de trabalho</summary>
+                          <p>Caracteres {{ periodo.trabalho.inicio }} a {{ periodo.trabalho.fim }}. A contagem começa em zero e o limite final é exclusivo.</p>
+                        </details>
+                        <p class="hierarchy-status" data-hierarchy-status role="status" aria-live="polite">{% if saved_hierarchy %}Análise estrutural salva.{% else %}Abra o período para consultar sua análise estrutural.{% endif %}</p>
+                        <div data-hierarchy-result>{% if saved_hierarchy %}{{ hierarchy_result(saved_hierarchy, record.id) }}{% endif %}</div>
+                        <form method="post" action="{{ url_for('hierarchy_submission', record_id=record.id) }}" class="hierarchy-form" data-hierarchy-form{% if saved_hierarchy %} hidden{% endif %}>
+                          <input type="hidden" name="segmentacao_id" value="{{ segmented.segmentacao_id }}">
+                          <input type="hidden" name="periodo_id" value="{{ periodo.id }}">
+                          {% if annotated|default(none) %}<input type="hidden" name="anotacao_id" value="{{ annotated.anotacao_id }}">{% endif %}
+                          {% if analyzed|default(none) %}<input type="hidden" name="analise_id" value="{{ analyzed.analise_id }}">{% endif %}
+                          <button type="submit" data-hierarchy-retry>Preparar análise estrutural</button>
+                        </form>
+                      </details>
+                    </li>
+                    {% endfor %}
+                  </ol>
                 </details>
               </li>
               {% endfor %}
             </ol>
             {% else %}
             <p class="empty-result">Nenhum período identificado neste texto de trabalho.</p>
+            {% endif %}
+            {% if hierarchy_history|default([])|length > 1 %}
+            <details class="hierarchy-history">
+              <summary>Análises estruturais salvas ({{ hierarchy_history|length }})</summary>
+              <ul>{% for history in hierarchy_history %}<li><a href="{{ url_for('submission', record_id=record.id, preparacao_id=prepared.preparacao_id, segmentacao_id=segmented.segmentacao_id, hierarquia_id=history.hierarquia_id) }}#etapa-segmentacao">Análise estrutural {{ loop.index }}</a> <time datetime="{{ history.registrado_em }}">{{ history.registrado_em|horario_brasilia }} (horário de Brasília)</time></li>{% endfor %}</ul>
+            </details>
             {% endif %}
           </div>
           {% endif %}
@@ -881,5 +991,6 @@
 
       <footer class="site-footer">Um espaço para organizar o começo da sua análise.</footer>
     </div>
+    <script src="{{ url_for('static', filename='segmentacao.js') }}" defer></script>
   </body>
 </html>

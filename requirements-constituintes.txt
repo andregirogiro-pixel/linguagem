@@ -1,0 +1,7 @@
+# Extensão opcional para constituintes; instalar após requirements.txt.
+# Na CPU, instalar primeiro pelo índice oficial para evitar dependências CUDA:
+# python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+# Depois: python -m pip install -r requirements-constituintes.txt
+# Pesos: python modelo_constituintes.py --baixar --verificar
+torch==2.10.0
+stanza==1.11.0
