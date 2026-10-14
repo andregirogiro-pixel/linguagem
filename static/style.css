@@ -169,6 +169,7 @@ h1 {
 .hierarchy-syntax > summary { font-size: 13px; font-weight: 600; }
 .hierarchy-tree { margin: 10px 0 2px 6px; border-left: 2px solid var(--line); padding-left: 12px; }
 .hierarchy-tree > li + li { margin-top: 8px; }
+.hierarchy-local-tree { margin-top: 12px; }
 .hierarchy-constituent > summary, .hierarchy-word > summary { padding: 5px 0; font-size: 13px; }
 .hierarchy-node-label, .hierarchy-word-text { font-weight: 600; overflow-wrap: anywhere; }
 .hierarchy-word-text { white-space: pre-wrap; }
@@ -180,6 +181,11 @@ h1 {
 .hierarchy-attributes dd { margin: 0; overflow-wrap: anywhere; }
 .hierarchy-period code { padding: 1px 4px; background: #eff3ec; border-radius: 3px; font-size: 11px; overflow-wrap: anywhere; }
 .hierarchy-method, .hierarchy-history { margin-top: 20px; color: var(--muted); font-size: 12px; }
+.hierarchy-technical, .hierarchy-original, .hierarchy-review { margin: 10px 0; color: var(--muted); font-size: 12px; }
+.hierarchy-technical > summary, .hierarchy-original > summary, .hierarchy-review > summary { cursor: pointer; }
+.hierarchy-complete { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 20px; }
+.hierarchy-review-note { margin: 8px 0 12px; padding-left: 10px; border-left: 2px solid var(--accent); color: var(--muted); font-size: 12px; }
+.hierarchy-local-tree .hierarchy-label { overflow-wrap: anywhere; }
 .hierarchy-download { margin-top: 16px; }
 .hierarchy-history ul { padding-left: 20px; }
 .hierarchy-history time { margin-left: 8px; }

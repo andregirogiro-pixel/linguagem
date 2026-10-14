@@ -62,6 +62,7 @@ from hierarquia_sintatica import (
     ErroLimite as ErroHierarquiaLimite,
     construir_hierarquia, validar_hierarquia,
 )
+from revisao_hierarquia import preparar_revisao
 
 
 BASE = Path(__file__).resolve().parent
@@ -784,15 +785,16 @@ def create_app(config=None):
             vector_job=vector_job, vectorized=vectorized, vector_history=vector_history,
             vector_profiles=VECTOR_PROFILES,
             hierarchy_data=hierarchy_data, hierarchy_history=[dict(item) for item in hierarchy_history],
+            hierarchy_visualizations={period_id: preparar_revisao(value) for period_id, value in hierarchy_data.items()},
         )
 
     @app.post("/envios/<int:record_id>/hierarquias")
     def hierarchy_submission(record_id):
-        allowed = {"segmentacao_id", "periodo_id", "anotacao_id", "analise_id", "regenerar"}
+        allowed = {"segmentacao_id", "periodo_id", "anotacao_id", "analise_id", "regenerar", "incluir_visualizacao"}
         if request.is_json:
             payload = request.get_json(silent=True)
             if not isinstance(payload, dict) or payload.keys() - allowed:
-                return {"erro": "Envie segmentacao_id, periodo_id e, opcionalmente, anotacao_id, analise_id e regenerar."}, 400
+                return {"erro": "Envie segmentacao_id, periodo_id e, opcionalmente, anotacao_id, analise_id, regenerar e incluir_visualizacao."}, 400
         else:
             if set(request.form) - allowed or any(len(request.form.getlist(k)) != 1 for k in request.form):
                 return {"erro": "Selecione uma única origem para a hierarquia."}, 400
@@ -807,8 +809,9 @@ def create_app(config=None):
         for field in ("anotacao_id", "analise_id"):
             if field in payload and (not isinstance(payload[field], str) or not payload[field].strip()):
                 return {"erro": f"{field} deve ser uma string não vazia."}, 400
-        if type(payload.get("regenerar", False)) is not bool:
-            return {"erro": "regenerar deve ser booleano."}, 400
+        for field in ("regenerar", "incluir_visualizacao"):
+            if type(payload.get(field, False)) is not bool:
+                return {"erro": f"{field} deve ser booleano."}, 400
         try:
             with hierarchy_lock, closing(connect_database(app.config["DATABASE"])) as connection:
                 document = connection.execute("SELECT * FROM submissions WHERE id = ?", (record_id,)).fetchone()
@@ -872,7 +875,8 @@ def create_app(config=None):
         except sqlite3.IntegrityError:
             return {"erro": "Não foi possível registrar a hierarquia para esta origem."}, 409
         if request.is_json:
-            return Response(json.dumps(hierarchy, ensure_ascii=False, allow_nan=False), status=status, mimetype="application/json")
+            response_data = {"hierarquia": hierarchy, "visualizacao": preparar_revisao(hierarchy)} if payload.get("incluir_visualizacao") else hierarchy
+            return Response(json.dumps(response_data, ensure_ascii=False, allow_nan=False), status=status, mimetype="application/json")
         return redirect(url_for(
             "submission", record_id=record_id, hierarquia_id=hierarchy["hierarquia_id"], _anchor="etapa-segmentacao",
         ), code=303)
@@ -880,7 +884,9 @@ def create_app(config=None):
     @app.get("/envios/<int:record_id>/hierarquia.json")
     def hierarchy_json(record_id):
         hierarchy_id = request.args.get("hierarquia_id")
-        if set(request.args) != {"hierarquia_id"} or len(request.args.getlist("hierarquia_id")) != 1 or not hierarchy_id.strip():
+        if (set(request.args) - {"hierarquia_id", "visualizacao"}
+                or len(request.args.getlist("hierarquia_id")) != 1 or not hierarchy_id.strip()
+                or ("visualizacao" in request.args and request.args.getlist("visualizacao") != ["1"])):
             return {"erro": "Selecione uma única hierarquia_id para exportar."}, 400
         try:
             with closing(connect_database(app.config["DATABASE"])) as connection:
@@ -892,7 +898,8 @@ def create_app(config=None):
                     abort(404)
         except SOURCE_ERRORS as error:
             return {"erro": str(error)}, 409
-        return Response(json.dumps(hierarchy, ensure_ascii=False, allow_nan=False), mimetype="application/json")
+        response_data = {"hierarquia": hierarchy, "visualizacao": preparar_revisao(hierarchy)} if request.args.get("visualizacao") == "1" else hierarchy
+        return Response(json.dumps(response_data, ensure_ascii=False, allow_nan=False), mimetype="application/json")
 
     @app.post("/envios/<int:record_id>/preparacoes")
     def prepare_submission(record_id):

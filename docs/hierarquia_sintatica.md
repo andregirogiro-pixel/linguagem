@@ -105,8 +105,54 @@ em árvore de constituintes.
 
 O modelo de dados admite encaixes e alcances descontínuos. Em
 “O menino que chegou sorriu”, por exemplo, a relativa está dentro de um
-sintagma nominal. A visualização conserva o encaixe da árvore do período,
-identificando as palavras que servem de contexto à oração em exame.
+sintagma nominal. A visualização por oração mostra somente subárvores
+originais inteiramente pertencentes à oração. Quando um sintagma abrange
+outra oração, seus descendentes completos são apresentados separadamente;
+nenhum sintagma é recortado para fingir uma árvore menor. A árvore integral
+do período aparece uma única vez, recolhida em **Árvore completa e dados do
+modelo**, para consultar os encaixes entre orações.
+
+## Leitura revisada e previsões originais
+
+A leitura por oração elimina invólucros técnicos `ROOT`, preterminais de
+classe gramatical e cadeias unárias redundantes. Esses nós permanecem na
+árvore técnica e no JSON original. Pontuação marginal não aparece como uma
+oração isolada; “, percebi” e “.” passam a ser lidos como “percebi”, com seus
+intervalos literais preservados. `Tense=Imp` é apresentado como **imperfeito**;
+`Mood=Imp`, como **imperativo**.
+
+As observações do spaCy não são sobrescritas. A camada adicional
+`analise_gramatical.py` usa o léxico português local de
+`spacy-lookups-data==1.0.5` (MIT) para conferir lemas e formas regulares
+inequívocas de primeira pessoa no pretérito perfeito. Por exemplo, o léxico
+e a flexão permitem revisar “cheguei” para o lema “chegar” e “percebi” para
+“perceber”, primeira pessoa singular do passado. As revisões ficam em
+`palavra.revisao`, com método, versão do léxico e justificativas; os campos
+brutos, dependências, cabeças e coordenadas continuam intactos.
+
+Não há correção genérica de todo paradigma verbal. Homógrafos e flexões sem
+evidência segura não são forçados. Conflito com sujeito expresso gera aviso.
+Uma ligação ambígua como “em casa” associado a “caderno” também gera aviso,
+sem mudar silenciosamente a árvore. Funções oracionais são apresentadas como
+funções dos núcleos verbais; um termo com preposição ligado a verbo de movimento
+não é exibido simplesmente como objeto direto.
+
+A camada `revisao_hierarquia.py` acrescenta classificações restritas sustentadas
+pelos vínculos: `advcl` com “quando” permite a leitura adverbial temporal;
+`ccomp` com “que”, sem preposição e regência direta reconhecida permite a
+leitura substantiva objetiva direta. Outras classificações ficam nas previsões
+originais, sem afirmar que todos os subtipos foram resolvidos. Auxiliar
+“haver/ter” no imperfeito do indicativo com particípio recebe a identificação
+do mais-que-perfeito composto do indicativo.
+
+Essas camadas são aplicadas também às execuções já salvas: atualizar a página
+mostra a nova leitura sem executar os modelos ou modificar o banco. Os dados
+revisados são exportáveis e reutilizáveis, separados dos resultados originais.
+Após atualizar o código, instale a nova dependência na pasta do projeto:
+
+```bash
+.venv/bin/python -m pip install -r requirements.txt
+```
 
 ## Persistência e reutilização
 
@@ -124,9 +170,12 @@ instalado e não executa inferência.
 - `POST /envios/<id>/hierarquias`: JSON com `segmentacao_id` e `periodo_id`.
   `anotacao_id` e `analise_id` opcionais fixam as origens existentes;
   `regenerar: true` solicita nova execução. Resposta 201 para nova execução,
-  200 para reutilização.
+  200 para reutilização. `incluir_visualizacao: true` retorna um envelope com
+  `hierarquia` original e `visualizacao` revisada; sem essa opção o contrato
+  original da resposta é preservado.
 - `GET /envios/<id>/hierarquia.json?hierarquia_id=...`: exporta a execução
-  validada e confere sua origem persistida.
+  validada e confere sua origem persistida. Acrescentar `visualizacao=1`
+  exporta o envelope original/revisado sem alterar o registro armazenado.
 - A mesma rota POST aceita formulário e redireciona para o resultado salvo,
   permitindo uso sem JavaScript.
 
@@ -147,12 +196,13 @@ LINGUA_TESTE_CONSTITUINTES_REAL=1 .venv/bin/python -m unittest discover \
   -s tests -p 'test_modelo_constituintes.py' -v
 ```
 
-Na validação desta implementação, a suíte do Língua (sem os testes do
-Agente Analista, que tem pendências próprias) executou 628 testes: 626 passaram
+Na validação das correções, a suíte do Língua (sem os testes do
+Agente Analista, que tem pendências próprias) executou 658 testes: 656 passaram
 e dois opcionais foram pulados. O navegador Chromium também verificou a
 navegação, teclado, erros e nova tentativa, preservação do estado, segurança
 de apresentação, largura móvel e uso sem JavaScript, com respostas de análise
-controladas. A inferência real do Stanza **não foi validada**: o download dos
+controladas. A inferência real do Stanza **não foi validada na máquina de
+desenvolvimento**: o download dos
 pesos retornou HTTP 403 no proxy. Não há avaliação local de qualidade dos
 constituintes. Após liberar a rede, é necessário baixar os pesos e executar
 as verificações reais acima antes de considerar esse nível pronto.

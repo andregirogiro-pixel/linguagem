@@ -1,83 +1,130 @@
-{% macro hierarchy_morphology(features) -%}
-{% set labels = {'Gender': 'Gênero', 'Number': 'Número', 'Person': 'Pessoa', 'Tense': 'Tempo', 'Mood': 'Modo', 'VerbForm': 'Forma verbal', 'Definite': 'Definição', 'PronType': 'Tipo de pronome', 'Case': 'Caso'} %}
-{% set values = {'Masc': 'masculino', 'Fem': 'feminino', 'Sing': 'singular', 'Plur': 'plural', 'Pres': 'presente', 'Past': 'passado', 'Fut': 'futuro', 'Ind': 'indicativo', 'Sub': 'subjuntivo', 'Imp': 'imperativo', 'Fin': 'finita', 'Inf': 'infinitivo', 'Ger': 'gerúndio', 'Part': 'particípio'} %}
-{% for feature, value in features|dictsort %}{{ labels.get(feature, feature) }}: {{ values.get(value, value) }} <code>{{ feature }}={{ value }}</code>{% if not loop.last %}; {% endif %}{% endfor %}
+{% macro hierarchy_morphology(features, technical=false) -%}
+{% set labels = {'Gender': 'Gênero', 'Number': 'Número', 'Person': 'Pessoa', 'Tense': 'Tempo', 'Mood': 'Modo', 'VerbForm': 'Forma verbal', 'Definite': 'Definição', 'PronType': 'Tipo de pronome', 'Case': 'Caso', 'Voice': 'Voz', 'Degree': 'Grau'} %}
+{% set values = {
+  'Gender': {'Masc': 'masculino', 'Fem': 'feminino', 'Com': 'comum'},
+  'Number': {'Sing': 'singular', 'Plur': 'plural'},
+  'Person': {'1': 'primeira pessoa', '2': 'segunda pessoa', '3': 'terceira pessoa'},
+  'Tense': {'Pres': 'presente', 'Past': 'pretérito perfeito', 'Imp': 'imperfeito', 'Pqp': 'mais-que-perfeito', 'Fut': 'futuro'},
+  'Mood': {'Ind': 'indicativo', 'Sub': 'subjuntivo', 'Imp': 'imperativo', 'Cnd': 'condicional'},
+  'VerbForm': {'Fin': 'finita', 'Inf': 'infinitivo', 'Ger': 'gerúndio', 'Part': 'particípio'},
+  'Definite': {'Def': 'definido', 'Ind': 'indefinido'},
+  'PronType': {'Art': 'artigo', 'Dem': 'demonstrativo', 'Ind': 'indefinido', 'Int': 'interrogativo', 'Prs': 'pessoal', 'Rel': 'relativo', 'Tot': 'totalizante', 'Neg': 'negativo'},
+  'Case': {'Nom': 'nominativo', 'Acc': 'acusativo', 'Dat': 'dativo', 'Gen': 'genitivo'},
+  'Voice': {'Act': 'ativa', 'Pass': 'passiva'}, 'Degree': {'Pos': 'positivo', 'Cmp': 'comparativo', 'Sup': 'superlativo'}
+} %}
+{% for feature, value in features|dictsort %}{% if technical %}<code>{{ feature }}={{ value }}</code>{% else %}{{ labels.get(feature, feature) }}: {{ values.get(feature, {}).get(value, value) }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}
 {%- endmacro %}
 {% macro hierarchy_tokens(token_ids, words) -%}{% for token_id in token_ids %}{{ words[token_id].texto if token_id in words else token_id }}{% if not loop.last %} {% endif %}{% else %}Não determinado{% endfor %}{%- endmacro %}
-{% macro hierarchy_word(word, in_clause=true, words={}) -%}
-<details class="hierarchy-word{% if not in_clause %} hierarchy-context-word{% endif %}">
-  <summary><span class="hierarchy-word-text">{{ word.texto }}</span> <span class="hierarchy-label">{{ word.classe or 'Classe não determinada' }}{% if not in_clause %} · contexto{% endif %}</span></summary>
+{% macro hierarchy_word_attributes(word) -%}
+<dl class="hierarchy-attributes">
+  <dt>Classe gramatical</dt><dd>{{ word.classe or 'Não determinada' }}</dd>
+  <dt>Função sintática</dt><dd>{{ word.funcao_sintatica or 'Não determinada' }}</dd>
+  <dt>Lema</dt><dd>{{ word.lema or 'Não disponível' }}</dd>
+  <dt>Morfologia</dt><dd>{% if word.morfologia %}{{ hierarchy_morphology(word.morfologia) }}{% else %}Sem atributos registrados{% endif %}</dd>
+</dl>
+{%- endmacro %}
+{% macro hierarchy_word_technical(word, words) -%}
+<details class="hierarchy-technical">
+  <summary>Dados técnicos da palavra</summary>
   <dl class="hierarchy-attributes">
-    <dt>Classe gramatical</dt><dd>{{ word.classe or 'Não determinada' }}{% if word.pos %} <code>{{ word.pos }}</code>{% endif %}</dd>
-    <dt>Função sintática</dt><dd>{{ word.funcao_sintatica or 'Não determinada' }}</dd>
-    <dt>Lema</dt><dd>{{ word.lema or 'Não disponível' }}</dd>
-    <dt>Morfologia</dt><dd>{% if word.morfologia %}{{ hierarchy_morphology(word.morfologia) }}{% else %}Sem atributos registrados{% endif %}</dd>
+    <dt>Classe do modelo (UD)</dt><dd>{{ word.pos or 'Não disponível' }}</dd>
+    <dt>Atributos do modelo (UD)</dt><dd>{% if word.morfologia %}{{ hierarchy_morphology(word.morfologia, true) }}{% else %}Sem atributos registrados{% endif %}</dd>
     <dt>Dependência do modelo</dt><dd>{{ word.dependencia or 'Não disponível' }}</dd>
-    <dt>Cabeça sintática</dt><dd>{% if word.cabeca_token_id in words %}{{ words[word.cabeca_token_id].texto }} <code>{{ word.cabeca_token_id }}</code>{% else %}{{ word.cabeca_token_id or 'Raiz do período' }}{% endif %}</dd>
+    <dt>Cabeça sintática do modelo</dt><dd>{% if word.cabeca_token_id in words %}{{ words[word.cabeca_token_id].texto }} <code>{{ word.cabeca_token_id }}</code>{% else %}{{ word.cabeca_token_id or 'Raiz do período' }}{% endif %}</dd>
     <dt>Token de origem</dt><dd>{{ word.token_id }}</dd>
   </dl>
 </details>
 {%- endmacro %}
-{% macro hierarchy_tree(node, words, clause_tokens=[]) -%}
+{% macro hierarchy_word(word, in_clause=true, words={}) -%}
+{% set display = word.revisao|default(word, true) %}
+<details class="hierarchy-word{% if not in_clause %} hierarchy-context-word{% endif %}">
+  <summary><span class="hierarchy-word-text">{{ word.texto }}</span> <span class="hierarchy-label">{{ display.classe or 'Classe não determinada' }}{% if word.revisao|default(none) %} · com revisão{% endif %}{% if not in_clause %} · contexto{% endif %}</span></summary>
+  {{ hierarchy_word_attributes(display) }}
+  {% if word.revisao|default(none) %}
+    <details class="hierarchy-review"><summary>Revisão gramatical e justificativas</summary>{% for reason in display.justificativas|default([display.justificativa] if display.justificativa|default(none) else []) %}<p class="hierarchy-review-note">{{ reason }}</p>{% endfor %}</details>
+    <details class="hierarchy-original"><summary>Previsão original do modelo</summary>{{ hierarchy_word_attributes(word) }}{{ hierarchy_word_technical(word, words) }}</details>
+  {% else %}{{ hierarchy_word_technical(word, words) }}{% endif %}
+  {% for warning in (word.avisos|default([])) + (word.alertas_revisao|default([])) %}<p class="hierarchy-help">{{ warning }}</p>{% endfor %}
+</details>
+{%- endmacro %}
+{% macro hierarchy_tree(node, words, clause_tokens=[], technical=false) -%}
 {% if node.tipo == 'palavra' %}
   {% if node.token_id in words %}{{ hierarchy_word(words[node.token_id], node.token_id in clause_tokens, words) }}{% else %}<p class="hierarchy-word-text">{{ node.texto }}</p>{% endif %}
 {% else %}
-<details class="hierarchy-constituent">
-  <summary><span class="hierarchy-node-label">{{ node.classificacao or 'Constituinte' }}</span>{% if node.rotulo %} <code>{{ node.rotulo }}</code>{% endif %} <span class="hierarchy-preview">{{ node.texto }}</span></summary>
-  {% if node.nucleo_token_ids or node.complemento_token_ids or node.modificador_token_ids %}
+{% set technical_labels = {'ROOT': 'Estrutura completa do período', 'S': 'Oração', 'CP': 'Estrutura de complementação', 'SBAR': 'Oração subordinada', 'NP': 'Sintagma nominal', 'VP': 'Sintagma verbal', 'PP': 'Sintagma preposicional', 'ADJP': 'Sintagma adjetival', 'ADVP': 'Sintagma adverbial', 'VERB': 'Verbo', 'AUX': 'Verbo auxiliar', 'DET': 'Determinante', 'NOUN': 'Substantivo', 'PROPN': 'Nome próprio', 'ADV': 'Advérbio', 'ADJ': 'Adjetivo', 'ADP': 'Adposição', 'SCONJ': 'Conjunção subordinativa', 'CCONJ': 'Conjunção coordenativa', 'PRON': 'Pronome', 'PUNCT': 'Pontuação', 'NUM': 'Numeral', 'PART': 'Partícula', 'INTJ': 'Interjeição', 'SYM': 'Símbolo'} %}
+<details class="hierarchy-constituent{% if technical %} hierarchy-model-node{% endif %}">
+  <summary><span class="hierarchy-node-label">{{ technical_labels.get(node.rotulo, node.classificacao or 'Etiqueta do modelo') if technical else node.classificacao or 'Constituinte' }}</span>{% if technical and node.rotulo %} <code>{{ node.rotulo }}</code>{% endif %} <span class="hierarchy-preview">{{ node.texto }}</span></summary>
+  {% if technical and (node.nucleo_token_ids or node.complemento_token_ids or node.modificador_token_ids) %}
   <dl class="hierarchy-attributes">
     {% for key, label in [('nucleo_token_ids', 'Núcleo candidato (dependências)'), ('complemento_token_ids', 'Complementos candidatos (dependências)'), ('modificador_token_ids', 'Modificadores candidatos (dependências)')] if node[key] %}
     <dt>{{ label }}</dt><dd>{% for token_id in node[key] %}{{ words[token_id].texto if token_id in words else token_id }}{% if not loop.last %}, {% endif %}{% endfor %}</dd>
     {% endfor %}
   </dl>
   {% endif %}
-  <ul class="hierarchy-tree">
-    {% for child in node.filhos %}<li>{{ hierarchy_tree(child, words, clause_tokens) }}</li>{% endfor %}
-  </ul>
+  <ul class="hierarchy-tree">{% for child in node.filhos %}<li>{{ hierarchy_tree(child, words, clause_tokens, technical) }}</li>{% endfor %}</ul>
 </details>
 {% endif %}
 {%- endmacro %}
-{% macro hierarchy_clauses(clauses, words, tree, parent_id=none) -%}
+{% macro hierarchy_forest(roots, words, clause_tokens) -%}
+<ul class="hierarchy-tree hierarchy-local-tree">{% for root in roots %}<li>{{ hierarchy_tree(root, words, clause_tokens) }}</li>{% endfor %}</ul>
+{%- endmacro %}
+{% macro hierarchy_clauses(clauses, words, parent_id=none) -%}
 <ol class="hierarchy-clauses">
   {% for clause in clauses if clause.pai_oracao_id == parent_id %}
   <li>
-    <details class="hierarchy-clause">
-      <summary>Oração {{ clauses.index(clause) + 1 }} <span class="hierarchy-label">{{ clause.rotulo }}</span></summary>
-      {% for span in clause.trechos %}<p class="period-text hierarchy-clause-text">{{ span.texto }}</p>{% endfor %}
-      {% if clause.trechos|length > 1 %}<p class="hierarchy-help">Esta oração ocupa trechos descontínuos; cada trecho mantém sua posição no período.</p>{% endif %}
+    <details class="hierarchy-clause" data-oracao-id="{{ clause.id }}">
+      <summary>Oração {{ clause.numero|default(clauses.index(clause) + 1) }} <span class="hierarchy-label">{{ clause.classificacao|default(clause.rotulo, true) }}</span></summary>
+      {% set spans = clause.trechos_leitura|default(clause.trechos) %}
+      {% for span in spans %}<p class="period-text hierarchy-clause-text">{{ span.texto }}</p>{% endfor %}
+      {% if spans|length > 1 %}<p class="hierarchy-help">Esta oração ocupa trechos descontínuos no período.</p>{% endif %}
+      {% if clause.justificativa|default(none) %}<p class="hierarchy-review-note">{{ clause.justificativa }}</p>{% endif %}
       <dl class="hierarchy-attributes">
         <dt>Núcleo verbal</dt><dd>{{ hierarchy_tokens(clause.nucleo_token_ids|default([]), words) }}</dd>
         <dt>Grupo verbal</dt><dd>{{ hierarchy_tokens(clause.grupo_verbal_token_ids|default([]), words) }}</dd>
+        {% if clause.tempo_composto|default(none) %}<dt>Tempo do grupo verbal</dt><dd>{{ clause.tempo_composto }}</dd>{% endif %}
         {% set connective_ids = clause.conectivo_token_ids|default(clause.conectivos_token_ids)|default([]) %}
         {% if connective_ids %}<dt>Conectivos</dt><dd>{{ hierarchy_tokens(connective_ids, words) }}</dd>{% endif %}
       </dl>
-      {% if clause.relacoes %}<ul class="hierarchy-relations">{% for relation in clause.relacoes %}<li>{{ {'coordenacao': 'Coordenação', 'subordinacao': 'Subordinação'}.get(relation.tipo, relation.tipo) }} com {% for target in clauses if target.id == relation.alvo_oracao_id %}oração {{ clauses.index(target) + 1 }}{% else %}oração não identificada{% endfor %}{% if relation.dependencia %} <code>{{ relation.dependencia }}</code>{% endif %}</li>{% endfor %}</ul>{% endif %}
+      {% if clause.relacoes %}<ul class="hierarchy-relations">{% for relation in clause.relacoes %}<li>{{ {'coordenacao': 'Coordenação', 'subordinacao': 'Subordinação'}.get(relation.tipo, relation.tipo) }} com {% for target in clauses if target.id == relation.alvo_oracao_id %}oração {{ target.numero|default(clauses.index(target) + 1) }}{% else %}oração não identificada{% endfor %}</li>{% endfor %}</ul>{% endif %}
       <details class="hierarchy-syntax">
         <summary>Análise sintática · sintagmas e palavras</summary>
-        <p class="hierarchy-help">A árvore completa do período preserva os encaixes entre constituintes e orações. Palavras de outras orações aparecem como contexto. Abra um constituinte para explorar seus filhos e uma palavra para consultar classe e função.</p>
-        {{ hierarchy_tree(tree, words, clause.token_ids) }}
+        <p class="hierarchy-help">Aqui aparecem apenas constituintes e palavras desta oração. Constituintes que atravessam outras orações ficam na árvore completa do período.</p>
+        {% set clause_tokens = clause.token_ids_leitura|default(clause.token_ids) %}
+        {% if clause.raizes is defined %}{{ hierarchy_forest(clause.raizes, words, clause_tokens) }}{% else %}
+        <ul class="hierarchy-tree hierarchy-local-tree">{% for token_id in clause_tokens if token_id in words %}<li>{{ hierarchy_word(words[token_id], true, words) }}</li>{% endfor %}</ul>
+        {% endif %}
+        {% for warning in clause.avisos|default([]) %}<p class="hierarchy-help">{{ warning }}</p>{% endfor %}
       </details>
-      {% if clauses|selectattr('pai_oracao_id', 'equalto', clause.id)|list %}{{ hierarchy_clauses(clauses, words, tree, clause.id) }}{% endif %}
+      {% if clauses|selectattr('pai_oracao_id', 'equalto', clause.id)|list %}{{ hierarchy_clauses(clauses, words, clause.id) }}{% endif %}
     </details>
   </li>
   {% endfor %}
 </ol>
 {%- endmacro %}
-{% macro hierarchy_result(hierarchy, record_id) -%}
-{% set words = {} %}{% for word in hierarchy.palavras %}{% set _ = words.update({word.token_id: word}) %}{% endfor %}
-<p class="hierarchy-overview"><strong>{{ hierarchy.oracoes|length }} {% if hierarchy.oracoes|length == 1 %}oração identificada{% else %}orações identificadas{% endif %}</strong> <span class="hierarchy-label">{{ hierarchy.palavras|length }} tokens no período</span></p>
-<p class="hierarchy-help">Análise estrutural gerada por modelos, sujeita a revisão. Orações coordenadas aparecem no mesmo nível; subordinadas ficam sob sua oração de referência.</p>
-{% if hierarchy.oracoes %}<h4 class="hierarchy-diagram-title">Relações entre orações</h4>{{ hierarchy_clauses(hierarchy.oracoes, words, hierarchy.arvore) }}{% else %}
-<p class="hierarchy-help">Nenhuma oração com núcleo verbal foi identificada. A árvore de constituintes continua disponível.</p>
-{{ hierarchy_tree(hierarchy.arvore, words, hierarchy.palavras|map(attribute='token_id')|list) }}
+{% macro hierarchy_result(hierarchy, record_id, visualizacao=none) -%}
+{% set view = visualizacao or hierarchy %}
+{% set words = {} %}{% for word in view.palavras %}{% set _ = words.update({word.token_id: word}) %}{% endfor %}
+{% set original_words = {} %}{% for word in hierarchy.palavras %}{% set _ = original_words.update({word.token_id: word}) %}{% endfor %}
+<p class="hierarchy-overview"><strong>{{ view.oracoes|length }} {% if view.oracoes|length == 1 %}oração identificada{% else %}orações identificadas{% endif %}</strong> <span class="hierarchy-label">{{ hierarchy.palavras|length }} tokens no período</span></p>
+<p class="hierarchy-help">Análise estrutural de modelos com revisão por regras explícitas, sujeita a conferência. Orações coordenadas aparecem no mesmo nível; subordinadas ficam sob sua oração de referência.</p>
+{% if view.oracoes %}<h4 class="hierarchy-diagram-title">Relações entre orações</h4>{{ hierarchy_clauses(view.oracoes, words) }}{% else %}
+<p class="hierarchy-help">Nenhuma oração com núcleo verbal foi identificada.</p>
+{% if view.raizes is defined %}{{ hierarchy_forest(view.raizes, words, words|list) }}{% else %}<ul class="hierarchy-tree hierarchy-local-tree">{% for word in words.values() %}<li>{{ hierarchy_word(word, true, words) }}</li>{% endfor %}</ul>{% endif %}
 {% endif %}
+<details class="hierarchy-complete hierarchy-technical">
+  <summary>Árvore completa e dados do modelo</summary>
+  <p class="hierarchy-help">A árvore original reúne todo o período e pode divergir das dependências. As etiquetas e previsões abaixo são preservadas para conferência.</p>
+  {{ hierarchy_tree(hierarchy.arvore, original_words, original_words|list, true) }}
+  <a class="download-link hierarchy-download" href="{{ url_for('hierarchy_json', record_id=record_id, hierarquia_id=hierarchy.hierarquia_id) }}">Baixar dados originais do modelo JSON <span aria-hidden="true">↓</span></a>
+</details>
 <details class="hierarchy-method">
   <summary>Método e limites da análise</summary>
-  <p class="hierarchy-help">Os rótulos abreviados representam categorias e dependências nativas dos modelos. A classificação gramatical e a função sintática são apresentadas separadamente. Núcleos, complementos e modificadores candidatos vêm das dependências; os encaixes da árvore vêm do modelo de constituintes. Trechos sem classificação segura permanecem sem determinação.</p>
+  <p class="hierarchy-help">Os constituintes preservam os encaixes propostos pelo analisador adicional. A visão de cada oração inclui apenas nós inteiros que pertencem a ela; não recorta sintagmas para criar constituintes novos. A revisão explicita regras aplicadas e mantém as previsões originais disponíveis. Relações da oração e funções de suas palavras são apresentadas separadamente.</p>
   {% if hierarchy.processamento.constituencia %}<dl class="hierarchy-attributes">{% for key, value in hierarchy.processamento.constituencia|dictsort if value is string or value is number %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>{% endif %}
-  {% if hierarchy.avisos %}<ul class="hierarchy-relations">{% for warning in hierarchy.avisos %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+  {% set warnings = (hierarchy.avisos + (view.avisos|default([])))|unique|list %}
+  {% if warnings %}<ul class="hierarchy-relations">{% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
 </details>
-<a class="download-link hierarchy-download" href="{{ url_for('hierarchy_json', record_id=record_id, hierarquia_id=hierarchy.hierarquia_id) }}">Baixar análise estrutural JSON <span aria-hidden="true">↓</span></a>
+<a class="download-link hierarchy-download hierarchy-reviewed-download" href="{{ url_for('hierarchy_json', record_id=record_id, hierarquia_id=hierarchy.hierarquia_id, visualizacao=1) }}">Baixar análise revisada JSON <span aria-hidden="true">↓</span></a>
 {%- endmacro %}
 <!doctype html>
 <html lang="pt-BR">
@@ -229,7 +276,7 @@
                           <p>Caracteres {{ periodo.trabalho.inicio }} a {{ periodo.trabalho.fim }}. A contagem começa em zero e o limite final é exclusivo.</p>
                         </details>
                         <p class="hierarchy-status" data-hierarchy-status role="status" aria-live="polite">{% if saved_hierarchy %}Análise estrutural salva.{% else %}Abra o período para consultar sua análise estrutural.{% endif %}</p>
-                        <div data-hierarchy-result>{% if saved_hierarchy %}{{ hierarchy_result(saved_hierarchy, record.id) }}{% endif %}</div>
+                        <div data-hierarchy-result>{% if saved_hierarchy %}{{ hierarchy_result(saved_hierarchy, record.id, (hierarchy_visualizations|default({})).get(periodo.id)) }}{% endif %}</div>
                         <form method="post" action="{{ url_for('hierarchy_submission', record_id=record.id) }}" class="hierarchy-form" data-hierarchy-form{% if saved_hierarchy %} hidden{% endif %}>
                           <input type="hidden" name="segmentacao_id" value="{{ segmented.segmentacao_id }}">
                           <input type="hidden" name="periodo_id" value="{{ periodo.id }}">
