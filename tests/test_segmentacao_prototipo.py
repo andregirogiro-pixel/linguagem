@@ -129,8 +129,8 @@ class SegmentacaoPrototipoTests(unittest.TestCase):
         self.assertEqual([o.atributos["data-oracao-id"] for o in oracoes],
                          [o["id"] for o in self.envelope["visualizacao"]["oracoes"]])
         self.assertEqual([[f.rotulo() for f in o.filhos()[0].filhos()] for o in oracoes], [
-            ["Oração 1", "Quando cheguei à biblioteca"], ["Oração 2", "percebi"],
-            ["Oração 3", "que havia esquecido o caderno em casa"]])
+            ["1", "Quando cheguei à biblioteca"], ["2", "percebi"],
+            ["3", "que havia esquecido o caderno em casa"]])
         listas = {id(o.pai.pai) for o in oracoes}
         self.assertEqual(len(listas), 1)
         self.assertTrue(oracoes[0].pai.pai.classe("hierarchy-clauses"))
@@ -161,13 +161,20 @@ class SegmentacaoPrototipoTests(unittest.TestCase):
         texto = self.unico(periodo, lambda e: e.classe("hierarchy-period-text"))
         self.assertEqual(texto.texto(), self.segmentacao["periodos"][0]["texto"])
 
-    def test_localizacao_fica_apos_toda_a_analise_do_periodo(self):
+    def test_localizacao_e_mensagem_de_sucesso_sao_retiradas_do_periodo(self):
         periodo = self.periodo(self.pagina())
         corpo = self.unico(periodo, lambda e: e.classe("hierarchy-period-body"))
-        localizacao = self.unico(corpo, lambda e: e.classe("period-location"))
-        self.assertIs(localizacao.pai, corpo)
-        self.assertIs(corpo.filhos()[-1], localizacao)
-        self.assertEqual(localizacao.filhos()[0].rotulo(), "Localização no texto de trabalho")
+        self.assertEqual(periodo.buscar(lambda e: e.classe("period-location")), [])
+        self.assertNotIn("Localização no texto de trabalho", periodo.texto())
+        self.assertNotIn("Análise estrutural salva", periodo.texto())
+        estado = self.unico(periodo, lambda e: "data-hierarchy-status" in e.atributos)
+        self.assertEqual(estado.texto(), "")
+        self.assertIn("hidden", estado.atributos)
+        cabecalho = periodo.filhos()[0]
+        self.assertEqual(cabecalho.tag, "summary")
+        self.assertEqual(cabecalho.atributos["aria-label"], "Período 1")
+        self.assertEqual(cabecalho.filhos()[0].rotulo(), "1")
+        self.assertTrue(cabecalho.filhos()[1].classe("hierarchy-period-text"))
         self.assertEqual(len(corpo.buscar(lambda e: e.classe("hierarchy-complete"))), 1)
 
     def test_paragrafos_destaques_e_contagem_parcial_preservam_o_literal(self):

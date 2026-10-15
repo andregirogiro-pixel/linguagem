@@ -88,6 +88,11 @@ o modelo ou criam registros.
 O parágrafo exibe seu texto completo, com destaques discretos para os
 períodos. As orações aparecem no mesmo nível, numeradas pelo primeiro token
 próprio no texto, inclusive quando uma oração ocupa trechos descontínuos.
+O parágrafo contém a caixa **Períodos**, e cada período contém a caixa
+**Orações**. Os cartões individuais exibem apenas o número na faixa superior,
+com o texto logo abaixo, visível também quando recolhidos. A caixa sintática
+reúne uma caixa de classificação geral e outra de termos e sintagmas; a caixa
+morfológica vem em seguida, no mesmo nível da sintática.
 A relação com a oração principal ou coordenada é indicada dentro da caixa
 sintática, com o número da oração de destino. Não há encaixe visual de uma
 oração dentro de outra nessa navegação.
@@ -100,8 +105,10 @@ que havia esquecido o caderno em casa.” tem 12 palavras e 75 caracteres.
 O total oracional do parágrafo só é definitivo depois da análise de todos
 os períodos; antes disso, a interface informa o subtotal identificado e
 quantos períodos foram analisados. Um período analisado com zero orações
-também conta como concluído. A localização dos caracteres aparece recolhida
-ao final de cada período, após os resultados e controles.
+também conta como concluído. A localização dos caracteres não aparece nessa
+navegação; os intervalos continuam disponíveis nos dados exportados.
+Avisos de carregamento e erros aparecem quando necessários; uma análise
+salva não acrescenta mensagem de sucesso entre o texto e as orações.
 
 O Stanza recebe a lista de tokens existente, com tokenização prévia e sem
 expansão de contrações. Suas folhas precisam reproduzir exatamente os textos
@@ -233,12 +240,15 @@ LINGUA_TESTE_CONSTITUINTES_REAL=1 .venv/bin/python -m unittest discover \
   -s tests -p 'test_modelo_constituintes.py' -v
 ```
 
-Na validação desta apresentação, a suíte do Língua (sem os testes do
+Na implementação inicial desta apresentação, a suíte do Língua (sem os testes do
 Agente Analista, que tem pendências próprias) executou 683 testes: 681 passaram
 e dois opcionais foram pulados. O navegador Chromium também verificou a
 navegação, teclado, erros e nova tentativa, preservação do estado, segurança
 de apresentação, largura móvel e uso sem JavaScript, com respostas de análise
-controladas. A inferência real do Stanza **não foi validada na máquina de
+controladas. Na revisão das caixas e faixas numéricas, os 44 testes dirigidos
+de segmentação, hierarquia e apresentação passaram. O Chromium conferiu
+cabeçalhos, bordas e estados em 1280, 390 e 320 pixels, além da leitura salva
+sem JavaScript. A inferência real do Stanza **não foi validada na máquina de
 desenvolvimento**: o download dos
 pesos retornou HTTP 403 no proxy. Não há avaliação local de qualidade dos
 constituintes. Após liberar a rede, é necessário baixar os pesos e executar

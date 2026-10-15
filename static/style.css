@@ -138,9 +138,7 @@ h1 {
 .period-list li:last-child { padding-bottom: 0; }
 .period-list li::marker { color: var(--muted); font-size: 14px; font-weight: 600; }
 .period-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.period-location { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
-.period-location summary, .segmentation-history summary, .preparation-history summary, .annotation-history summary, .analysis-history summary { cursor: pointer; }
-.period-location p { margin: 6px 0 0; }
+.segmentation-history summary, .preparation-history summary, .annotation-history summary, .analysis-history summary { cursor: pointer; }
 .hierarchy-help { margin: 10px 0 16px; color: var(--muted); font-size: 13px; }
 .hierarchy-paragraphs, .hierarchy-periods, .hierarchy-clauses, .hierarchy-tree { margin: 0; padding: 0; list-style: none; }
 .hierarchy-text-group { margin-top: 24px; padding: 16px; border-radius: 12px; background: #f2f4f0; }
@@ -164,25 +162,29 @@ h1 {
 .hierarchy-stats dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .hierarchy-stats small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; font-weight: 400; }
 .hierarchy-stats small:empty { display: none; }
-.hierarchy-period-group { padding: 14px; border: 1px solid #d9ded5; border-radius: 8px; background: #f4f6f1; }
+.hierarchy-period-group { border: 1px solid #d9ded5; border-radius: 8px; background: #f4f6f1; }
+.hierarchy-period-group > .hierarchy-group-title { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.hierarchy-periods { padding: 14px; }
 .hierarchy-periods > li + li { margin-top: 12px; }
 .hierarchy-period { border: 1px solid var(--line); border-radius: 7px; background: #f8faf6; }
-.hierarchy-period > summary { padding: 12px 14px; font-size: 14px; }
-.hierarchy-number { margin-right: 8px; font-weight: 650; }
-.hierarchy-period[open] > summary, .hierarchy-clause[open] > summary { border-bottom: 1px solid var(--line); }
-.hierarchy-period[open] > summary > .hierarchy-preview, .hierarchy-clause[open] > summary > .hierarchy-preview { display: none; }
+.hierarchy-period > summary, .hierarchy-clause > summary { position: relative; display: block; list-style: none; padding: 0; font-size: 14px; }
+.hierarchy-period > summary::-webkit-details-marker, .hierarchy-clause > summary::-webkit-details-marker { display: none; }
+.hierarchy-period > summary::after, .hierarchy-clause > summary::after { content: '▸'; position: absolute; top: 10px; right: 14px; color: var(--muted); font-size: 12px; }
+.hierarchy-period[open] > summary::after, .hierarchy-clause[open] > summary::after { content: '▾'; }
+.hierarchy-number { display: block; padding: 10px 14px; border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; font-weight: 650; }
+.hierarchy-period > summary > .hierarchy-period-text, .hierarchy-clause > summary > .hierarchy-clause-text { display: block; border: 0; border-radius: 0 0 6px 6px; }
 .hierarchy-period-body { padding: 14px; }
 .hierarchy-label { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .hierarchy-status { margin: 12px 0; color: var(--muted); font-size: 13px; }
 .hierarchy-status[data-state="error"] { padding: 10px 12px; border-left: 3px solid #b87162; background: #fff4f1; color: #873127; }
 .hierarchy-period [data-hierarchy-result] { min-width: 0; }
-.hierarchy-clause-group { margin-top: 20px; }
+.hierarchy-clause-group { margin-top: 16px; border: 1px solid #d5ddd1; border-radius: 8px; background: #f4f6f1; }
+.hierarchy-clause-group > .hierarchy-section-title { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.hierarchy-clause-group > .hierarchy-clauses { padding: 14px; }
 .hierarchy-clauses > li + li { margin-top: 12px; }
 .hierarchy-clause { border: 1px solid var(--line); border-radius: 7px; background: #f0f3ed; }
-.hierarchy-clause > summary { padding: 12px 14px; font-size: 14px; }
 .hierarchy-clause-body { padding: 12px; }
-.hierarchy-clause-text + .hierarchy-clause-text { margin-top: 8px; }
-.hierarchy-clause-panels { display: grid; gap: 12px; margin-top: 14px; }
+.hierarchy-clause-panels { display: grid; gap: 12px; }
 .hierarchy-relations { margin: 10px 0; padding-left: 20px; color: var(--muted); font-size: 12px; }
 .hierarchy-syntax, .hierarchy-morphology { min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .hierarchy-syntax > summary, .hierarchy-morphology > summary { padding: 12px; font-size: 14px; font-weight: 600; }
@@ -193,6 +195,9 @@ h1 {
 .hierarchy-panel-body { padding: 12px; }
 .hierarchy-classification { margin-bottom: 16px; padding: 12px; border: 1px solid #dbe4d6; border-radius: 5px; background: #f4f8f1; font-size: 13px; }
 .hierarchy-classification p { margin: 6px 0 0; }
+.hierarchy-terms { border: 1px solid var(--line); border-radius: 6px; }
+.hierarchy-terms > .hierarchy-section-title { margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.hierarchy-terms > .hierarchy-analysis-rows { padding: 12px; }
 .hierarchy-analysis-rows { display: grid; gap: 8px; }
 .hierarchy-analysis-row { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 2fr); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; font-size: 13px; }
 .hierarchy-analysis-text { padding: 12px; background: #edf1e8; font-weight: 650; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -237,7 +242,8 @@ h1 {
   .hierarchy-text-group { padding: 4px; }
   .hierarchy-paragraph > summary { padding: 12px; }
   .hierarchy-paragraph-body, .hierarchy-clause-body, .hierarchy-panel-body { padding: 6px; }
-  .hierarchy-period-group, .hierarchy-period-body { padding: 4px; }
+  .hierarchy-period-body { padding: 4px; }
+  .hierarchy-periods, .hierarchy-clause-group > .hierarchy-clauses { padding: 6px; }
   .hierarchy-paragraph-text, .hierarchy-period-text, .hierarchy-clause-text { padding: 10px; }
   .hierarchy-paragraph-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hierarchy-stats { gap: 5px; }
@@ -245,6 +251,7 @@ h1 {
   .hierarchy-stats dd { font-size: 12px; }
   .hierarchy-analysis-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
   .hierarchy-analysis-text, .hierarchy-analysis-classification { padding: 8px; }
+  .hierarchy-terms > .hierarchy-analysis-rows { padding: 6px; }
   .hierarchy-syntax > summary, .hierarchy-morphology > summary { font-size: 13px; }
   .hierarchy-tree { margin-left: 0; padding-left: 7px; }
   .hierarchy-preview { display: block; margin-left: 0; }

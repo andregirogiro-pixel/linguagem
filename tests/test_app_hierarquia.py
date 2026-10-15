@@ -108,7 +108,9 @@ class HierarchyAppTests(unittest.TestCase):
         self.assertEqual(r.get_json(), original)
         r = client.get(self.base, query_string={'hierarquia_id': original['hierarquia_id']})
         self.assertEqual(r.status_code, 200)
-        self.assertIn('Análise estrutural salva', r.get_data(as_text=True))
+        html = r.get_data(as_text=True)
+        self.assertIn('data-hierarchy-loaded="true"', html)
+        self.assertNotIn('Análise estrutural salva', html)
 
     def test_unavailable_model_rolls_back_new_upstream_records(self):
         with patch.object(ArvoreControlada, 'parse', side_effect=ErroModelo('Modelo não instalado')):

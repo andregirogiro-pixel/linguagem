@@ -192,7 +192,9 @@
       const targetText = target ? `oração ${target.numero || clauses.indexOf(target) + 1} (${target.classificacao || target.rotulo || "Classificação não determinada"})` : "oração não identificada";
       classification.append(element("p", "", `${label} ${targetText}`));
     }
-    body.append(classification, element("h5", "hierarchy-section-title", "Termos da oração e sintagmas"), renderTerms(clause, words));
+    const terms = element("section", "hierarchy-terms");
+    terms.append(element("h5", "hierarchy-section-title", "Termos da oração e sintagmas"), renderTerms(clause, words));
+    body.append(classification, terms);
     const evidence = details("hierarchy-technical", "Relações e evidências sintáticas");
     if (clause.justificativa) evidence.append(element("p", "hierarchy-review-note", clause.justificativa));
     const verbal = element("dl", "hierarchy-attributes");
@@ -216,10 +218,11 @@
       const node = details("hierarchy-clause", "");
       node.dataset.oracaoId = clause.id;
       const spans = clause.trechos_leitura || clause.trechos || [];
-      node.firstChild.append(element("span", "hierarchy-number", `Oração ${clause.numero || index + 1}`),
-        element("span", "hierarchy-preview", spans.map((span) => span.texto).join(" … ")));
+      const number = clause.numero || index + 1;
+      node.firstChild.setAttribute("aria-label", `Oração ${number}`);
+      node.firstChild.append(element("span", "hierarchy-number", number),
+        element("span", "period-text hierarchy-clause-text", spans.map((span) => span.texto).join(" … ")));
       const body = element("div", "hierarchy-clause-body");
-      for (const span of spans) body.append(element("p", "period-text hierarchy-clause-text", span.texto));
       if (spans.length > 1) body.append(element("p", "hierarchy-help", "Esta oração ocupa trechos descontínuos no período."));
       const panels = element("div", "hierarchy-clause-panels");
       panels.append(renderSyntax(clause, clauses, words), renderMorphology(clause, words));
@@ -305,6 +308,9 @@
     if (!status || !result || !form || !retry) continue;
     let state = panel.dataset.hierarchyLoaded === "true" ? "saved" : "idle";
     form.hidden = true;
+    status.dataset.state = state;
+    status.textContent = "";
+    status.hidden = true;
 
     const load = async () => {
       if (state === "loading" || state === "saved") return;
@@ -312,6 +318,7 @@
       form.hidden = true;
       result.setAttribute("aria-busy", "true");
       status.dataset.state = "loading";
+      status.hidden = false;
       status.textContent = "Preparando a análise estrutural deste período…";
       const body = { segmentacao_id: panel.dataset.segmentacaoId, periodo_id: panel.dataset.periodoId, incluir_visualizacao: true };
       if (panel.dataset.anotacaoId) body.anotacao_id = panel.dataset.anotacaoId;
@@ -336,10 +343,12 @@
         state = "saved";
         panel.dataset.hierarchyLoaded = "true";
         status.dataset.state = "saved";
-        status.textContent = "Análise estrutural salva. Abra uma oração para consultar a sintaxe e a morfologia.";
+        status.textContent = "";
+        status.hidden = true;
       } catch (error) {
         state = "error";
         status.dataset.state = "error";
+        status.hidden = false;
         status.textContent = `Análise estrutural indisponível: ${error.message || "falha de comunicação com o servidor."}`;
         retry.textContent = "Tentar novamente";
         form.hidden = false;

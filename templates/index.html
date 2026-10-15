@@ -88,9 +88,8 @@
   {% set spans = clause.trechos_leitura|default(clause.trechos) %}
   <li>
     <details class="hierarchy-clause" data-oracao-id="{{ clause.id }}">
-      <summary><span class="hierarchy-number">Oração {{ clause.numero|default(loop.index) }}</span><span class="hierarchy-preview">{% for span in spans %}{{ span.texto }}{% if not loop.last %} … {% endif %}{% endfor %}</span></summary>
+      <summary aria-label="Oração {{ clause.numero|default(loop.index) }}"><span class="hierarchy-number">{{ clause.numero|default(loop.index) }}</span><span class="period-text hierarchy-clause-text">{% for span in spans %}{{ span.texto }}{% if not loop.last %} … {% endif %}{% endfor %}</span></summary>
       <div class="hierarchy-clause-body">
-      {% for span in spans %}<p class="period-text hierarchy-clause-text">{{ span.texto }}</p>{% endfor %}
       {% if spans|length > 1 %}<p class="hierarchy-help">Esta oração ocupa trechos descontínuos no período.</p>{% endif %}
       <div class="hierarchy-clause-panels">
       <details class="hierarchy-syntax">
@@ -98,12 +97,14 @@
         <div class="hierarchy-panel-body">
         <div class="hierarchy-classification"><strong>{{ clause.classificacao|default(clause.rotulo, true) }}</strong>
         {% for relation in clause.relacoes %}<p>{{ {'coordenacao': 'Coordenada com', 'subordinacao': 'Subordinada à'}.get(relation.tipo, 'Relacionada à') }} {% for target in clauses if target.id == relation.alvo_oracao_id %}oração {{ target.numero|default(clauses.index(target) + 1) }} ({{ target.classificacao|default(target.rotulo, true) }}){% else %}oração não identificada{% endfor %}</p>{% endfor %}</div>
+        <section class="hierarchy-terms">
         <h5 class="hierarchy-section-title">Termos da oração e sintagmas</h5>
         <div class="hierarchy-analysis-rows">
         {% for term in clause.termos|default([]) %}
           <div class="hierarchy-analysis-row"><span class="hierarchy-analysis-text">{{ term.texto }}</span><div class="hierarchy-analysis-classification"><strong>{{ term.funcao }}</strong>{% if term.tipo %}<span>{{ term.tipo }}</span>{% endif %}{% if term.inferido %}<span class="hierarchy-label">Inferido pela flexão</span>{% endif %}{% if term.observacao|default(none) %}<span class="hierarchy-help">{{ term.observacao }}</span>{% endif %}</div></div>
         {% else %}<p class="hierarchy-help">Nenhum termo classificado com segurança nesta oração.</p>{% endfor %}
         </div>
+        </section>
         <details class="hierarchy-technical"><summary>Relações e evidências sintáticas</summary>
         {% if clause.justificativa|default(none) %}<p class="hierarchy-review-note">{{ clause.justificativa }}</p>{% endif %}
         <dl class="hierarchy-attributes">
@@ -283,7 +284,6 @@
             </dl>
             <a class="download-link" href="{{ url_for('segmentation_json', record_id=record.id, segmentacao_id=segmented.segmentacao_id) }}">Baixar segmentação JSON <span aria-hidden="true">↓</span></a>
 
-            <p class="hierarchy-help">Abra um parágrafo para ver seus períodos. Ao abrir um período, a análise de orações, sintagmas e palavras é preparada e salva para consulta.</p>
             {% if segmented.paragrafos %}
             <section class="hierarchy-text-group" aria-labelledby="hierarchy-text-title">
             <h3 id="hierarchy-text-title" class="hierarchy-group-title">Texto</h3>
@@ -309,15 +309,14 @@
                     {% set period_summary = segmentation_summary.periodos[periodo.id] %}
                     <li>
                       <details class="hierarchy-period" data-hierarchy-period data-periodo-id="{{ periodo.id }}" data-segmentacao-id="{{ segmented.segmentacao_id }}" data-hierarchy-url="{{ url_for('hierarchy_submission', record_id=record.id) }}"{% if annotated|default(none) %} data-anotacao-id="{{ annotated.anotacao_id }}"{% endif %}{% if analyzed|default(none) %} data-analise-id="{{ analyzed.analise_id }}"{% endif %}{% if saved_hierarchy %} data-hierarchy-loaded="true" data-hierarchy-clause-count="{{ period_summary.oracoes }}"{% endif %}>
-                        <summary><span class="hierarchy-number">Período {{ loop.index }}</span><span class="hierarchy-preview">{{ periodo.texto }}</span></summary>
+                        <summary aria-label="Período {{ loop.index }}"><span class="hierarchy-number">{{ loop.index }}</span><span class="period-text hierarchy-period-text">{{ periodo.texto }}</span></summary>
                         <div class="hierarchy-period-body">
-                        <p class="period-text hierarchy-period-text">{{ periodo.texto }}</p>
                         <dl class="hierarchy-stats" aria-label="Resumo do período">
                           <div><dt>Orações</dt><dd data-hierarchy-clause-count>{% if period_summary.oracoes is not none %}{{ period_summary.oracoes }}{% else %}A identificar{% endif %}</dd></div>
                           <div><dt>Palavras</dt><dd data-hierarchy-word-count>{{ period_summary.palavras }}</dd></div>
                           <div><dt>Caracteres</dt><dd data-hierarchy-character-count>{{ period_summary.caracteres }}</dd></div>
                         </dl>
-                        <p class="hierarchy-status" data-hierarchy-status role="status" aria-live="polite">{% if saved_hierarchy %}Análise estrutural salva.{% else %}Abra o período para consultar sua análise estrutural.{% endif %}</p>
+                        <p class="hierarchy-status" data-hierarchy-status role="status" aria-live="polite" hidden></p>
                         <div data-hierarchy-result>{% if saved_hierarchy %}{{ hierarchy_result(saved_hierarchy, record.id, (hierarchy_visualizations|default({})).get(periodo.id)) }}{% endif %}</div>
                         <form method="post" action="{{ url_for('hierarchy_submission', record_id=record.id) }}" class="hierarchy-form" data-hierarchy-form{% if saved_hierarchy %} hidden{% endif %}>
                           <input type="hidden" name="segmentacao_id" value="{{ segmented.segmentacao_id }}">
@@ -326,10 +325,6 @@
                           {% if analyzed|default(none) %}<input type="hidden" name="analise_id" value="{{ analyzed.analise_id }}">{% endif %}
                           <button type="submit" data-hierarchy-retry>Preparar análise estrutural</button>
                         </form>
-                        <details class="period-location">
-                          <summary>Localização no texto de trabalho</summary>
-                          <p>Caracteres {{ periodo.trabalho.inicio }} a {{ periodo.trabalho.fim }}. A contagem começa em zero e o limite final é exclusivo.</p>
-                        </details>
                         </div>
                       </details>
                     </li>
