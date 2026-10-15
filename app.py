@@ -9,7 +9,17 @@ import sqlite3
 from zoneinfo import ZoneInfo
 
 from flask import Flask, Response, abort, redirect, render_template, request, url_for
+from jinja2 import ChoiceLoader, FileSystemLoader, PrefixLoader
+from pydantic import ValidationError
 
+from geracao_paragrafo import ErroGeracao, gerar_paragrafo
+from configuracao_geracao import ConfiguracaoGeracao, ErroConfiguracaoGeracao
+from gerador.app.config import ErroParametros, catalogo_parametros
+from gerador.app.exporter import exportar_csv, exportar_jsonl
+from gerador.app.models import PedidoAvaliacao, PedidoLote, PedidoSorteio
+from gerador.app.sampler import resolver_plano
+from gerador.app.llm_client import capacidades_modelo
+from gerador.app.storage import ErroHistorico, HistoricoGeracao
 from preparacao import ErroPreparacao, preparar_texto, validar_registro
 from segmentacao import ErroSegmentacao, contexto_periodo, segmentar_preparacao, validar_segmentacao
 from anotacao import (
@@ -369,6 +379,10 @@ def load_vector_context(connection, document_id, context_execution_id):
 
 def create_app(config=None):
     app = Flask(__name__)
+    app.jinja_loader = ChoiceLoader([
+        app.jinja_loader,
+        PrefixLoader({"gerador": FileSystemLoader(BASE / "gerador" / "frontend")}),
+    ])
     app.config.from_mapping(
         DATABASE=os.environ.get("ANALISE_DB", str(BASE / "instance" / "textos.sqlite3")),
         MAX_CONTENT_LENGTH=2 * 1024 * 1024,
@@ -392,6 +406,10 @@ def create_app(config=None):
     database = Path(app.config["DATABASE"]).expanduser().resolve()
     database.parent.mkdir(parents=True, exist_ok=True)
     app.config["DATABASE"] = str(database)
+    generation_keys = ConfiguracaoGeracao(
+        app.config.get("GENERATION_KEYS_FILE", database.parent / "geracao_chaves.json")
+    )
+    generation_history_store = HistoricoGeracao(database)
     with closing(connect_database(database)) as connection:
         connection.execute(
             """CREATE TABLE IF NOT EXISTS submissions (
@@ -494,6 +512,190 @@ def create_app(config=None):
     @app.get("/")
     def index():
         return render_template("index.html", content="", error=None, record=None)
+
+    def generation_result(payload, status=200):
+        response = app.json.response(payload)
+        response.status_code = status
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    def generation_payload(fields, optional=()):
+        origin = request.headers.get("Origin")
+        if origin is not None and origin != request.host_url.rstrip("/"):
+            return None, generation_result({"erro": "Use a geração na própria página do aplicativo."}, 403)
+        if request.content_length is not None and request.content_length > 16 * 1024:
+            return None, generation_result({"erro": "A configuração enviada excedeu o limite permitido."}, 413)
+        if request.mimetype != "application/json":
+            return None, generation_result({"erro": "Envie a configuração em JSON."}, 415)
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict) or not fields <= set(payload) or set(payload) - fields - set(optional):
+            return None, generation_result({"erro": "Informe os campos necessários à geração."}, 400)
+        return payload, None
+
+    @app.route("/api/geracao/configuracoes", methods=["GET", "POST"])
+    def generation_settings():
+        try:
+            if request.method == "POST":
+                payload, error = generation_payload({"chave_api"})
+                if error is not None:
+                    return error
+                generation_keys.salvar("openrouter", payload["chave_api"])
+            return generation_result({"chave_salva": generation_keys.status()["openrouter"]})
+        except ErroConfiguracaoGeracao as error:
+            return generation_result({"erro": str(error)}, error.status_code)
+
+    @app.post("/api/gerar-paragrafo")
+    def generate_paragraph():
+        payload, error = generation_payload({"modelo"})
+        if error is not None:
+            return error
+        try:
+            key = generation_keys.obter("openrouter")
+            if not key:
+                return generation_result({"erro": "Salve a chave do provedor em Configurações antes de gerar."}, 400)
+            text = gerar_paragrafo("openrouter", payload["modelo"], key)
+        except (ErroGeracao, ErroConfiguracaoGeracao) as error:
+            return generation_result({"erro": str(error)}, error.status_code)
+        return generation_result({"texto": text})
+
+    @app.get("/api/geracao/catalogo")
+    def generation_catalog():
+        try:
+            catalogo = catalogo_parametros()
+            catalogo["temperatura"]["suportada"] = False
+            return generation_result(catalogo)
+        except ErroParametros as error:
+            return generation_result({"erro": str(error)}, 400)
+
+    @app.post("/api/geracao/sortear")
+    def generation_draw():
+        payload, error = generation_payload(set(), {"seed", "modo_sorteio"})
+        if error is not None:
+            return error
+        try:
+            pedido = PedidoSorteio.model_validate(payload)
+            plano = resolver_plano({}, 1, seed=pedido.seed, modo_sorteio=pedido.modo_sorteio)
+            return generation_result({"parametros": plano["planos"][0], "avisos": plano["avisos_por_item"][0]})
+        except ValidationError:
+            return generation_result({"erro": "Confira a semente e o modo de sorteio."}, 400)
+        except ErroParametros as error:
+            return generation_result({"erro": str(error)}, 400)
+
+    @app.get("/api/geracao/modelos/capacidades")
+    def generation_capabilities():
+        modelo = request.args.get("modelo", "")
+        try:
+            return generation_result(capacidades_modelo(modelo, consultar=True))
+        except ErroGeracao as error:
+            return generation_result({"erro": str(error)}, error.status_code)
+
+    @app.post("/api/geracao/lotes")
+    def generation_create_batch():
+        payload, error = generation_payload({"modelo", "quantidade", "parametros"},
+            {"temperatura", "tema", "anti_repeticao", "n_historico", "seed", "modo_sorteio", "max_tentativas"})
+        if error is not None:
+            return error
+        try:
+            pedido = PedidoLote.model_validate(payload)
+            capacidade = capacidades_modelo(pedido.modelo, consultar=False)
+            lote = generation_history_store.criar_lote(
+                **pedido.model_dump(), temperatura_suportada=capacidade["temperatura"]["suportada"],
+            )
+            return generation_result(lote, 201)
+        except ValidationError:
+            return generation_result({"erro": "Confira os parâmetros, a quantidade e a temperatura informados."}, 400)
+        except (ErroParametros, ErroHistorico, ErroGeracao) as error:
+            return generation_result({"erro": str(error)}, getattr(error, "status_code", 400))
+
+    @app.get("/api/geracao/lotes/<int:batch_id>")
+    def generation_batch(batch_id):
+        try:
+            return generation_result(generation_history_store.obter_lote(batch_id))
+        except ErroHistorico as error:
+            return generation_result({"erro": str(error)}, error.status_code)
+
+    @app.post("/api/geracao/lotes/<int:batch_id>/proximo")
+    def generation_next(batch_id):
+        payload, error = generation_payload(set())
+        if error is not None:
+            return error
+        try:
+            key = generation_keys.obter("openrouter")
+            if not key:
+                return generation_result({"erro": "Salve a chave do OpenRouter em Configurações antes de gerar."}, 400)
+            return generation_result(generation_history_store.gerar_proximo(batch_id, key))
+        except (ErroHistorico, ErroConfiguracaoGeracao) as error:
+            return generation_result({"erro": str(error)}, error.status_code)
+
+    @app.get("/api/geracao/historico")
+    def generation_history():
+        try:
+            offset = int(request.args.get("offset", "0"))
+            filtro = request.args.get("lote_id")
+            if filtro:
+                lotes = [generation_history_store.obter_lote(int(filtro))] if offset == 0 else []
+            else:
+                lotes = generation_history_store.listar_lotes(limit=20, offset=offset)
+            return generation_result({"lotes": lotes, "proximo_offset": offset + 20 if len(lotes) == 20 else None})
+        except (ValueError, ErroHistorico):
+            return generation_result({"erro": "Informe uma posição válida para o histórico."}, 400)
+
+    @app.patch("/api/geracao/itens/<int:item_id>/avaliacao")
+    def generation_review(item_id):
+        payload, error = generation_payload({"aprovado"})
+        if error is not None:
+            return error
+        try:
+            pedido = PedidoAvaliacao.model_validate(payload)
+            return generation_result(generation_history_store.avaliar_item(item_id, pedido.aprovado))
+        except ValidationError:
+            return generation_result({"erro": "Informe aprovado como verdadeiro, falso ou nulo."}, 400)
+        except ErroHistorico as error:
+            return generation_result({"erro": str(error)}, error.status_code)
+
+    @app.post("/api/geracao/itens/<int:item_id>/regenerar")
+    def generation_regenerate(item_id):
+        payload, error = generation_payload(set())
+        if error is not None:
+            return error
+        try:
+            item = generation_history_store.obter_item(item_id)
+            lote = generation_history_store.obter_lote(item["lote_id"])
+            controles = dict(lote["controles"])
+            controles["temperatura_suportada"] = capacidades_modelo(lote["modelo"], consultar=False)["temperatura"]["suportada"]
+            novo = generation_history_store.criar_lote(
+                lote["modelo"], item["parametros"], 1, temperatura=item["temperatura"], **controles,
+            )
+            return generation_result(novo, 201)
+        except (ErroHistorico, ErroParametros, ErroGeracao) as error:
+            return generation_result({"erro": str(error)}, getattr(error, "status_code", 400))
+
+    def generation_export_response(batch_id, formato):
+        try:
+            lote = generation_history_store.exportar_lote(batch_id)
+        except ErroHistorico as error:
+            return generation_result({"erro": str(error)}, error.status_code)
+        if formato == "csv":
+            response = Response(exportar_csv(lote), content_type="text/csv; charset=utf-8")
+        elif formato == "jsonl":
+            response = Response(exportar_jsonl(lote), content_type="application/x-ndjson; charset=utf-8")
+        else:
+            response = generation_result(lote)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Content-Disposition"] = f'attachment; filename="lote-{batch_id}.{formato}"'
+        return response
+
+    @app.get("/api/geracao/lotes/<int:batch_id>/exportar.json")
+    def generation_export(batch_id):
+        return generation_export_response(batch_id, "json")
+
+    @app.get("/api/geracao/lotes/<int:batch_id>/exportar.csv")
+    def generation_export_csv(batch_id):
+        return generation_export_response(batch_id, "csv")
+
+    @app.get("/api/geracao/lotes/<int:batch_id>/exportar.jsonl")
+    def generation_export_jsonl(batch_id):
+        return generation_export_response(batch_id, "jsonl")
 
     @app.post("/envios")
     def submit_text():

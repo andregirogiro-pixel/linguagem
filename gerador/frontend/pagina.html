@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gerador de parágrafos</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/geracao.js" defer></script>
+  </head>
+  <body>
+    <main class="page">
+      <div class="intro">
+        <h1>Gerador de parágrafos</h1>
+        <p class="intro-description">Escolha os parâmetros ou use Surpreenda-me para gerar textos em português.</p>
+      </div>
+      <section class="editor" aria-label="Geração de textos">
+        <form id="generation-controls"></form>
+        <label for="content">Seu texto</label>
+        <textarea id="content" rows="10" placeholder="Escreva ou gere um parágrafo. O texto permanece editável."></textarea>
+        {% include 'index.html' %}
+      </section>
+    </main>
+  </body>
+</html>

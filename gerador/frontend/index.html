@@ -1,0 +1,126 @@
+<div class="paragraph-generator" data-paragraph-generator data-url="{{ url_for('generate_paragraph') }}" data-settings-url="{{ url_for('generation_settings') }}" data-catalog-url="{{ url_for('generation_catalog') }}" data-draw-url="{{ url_for('generation_draw') }}" data-capabilities-url="{{ url_for('generation_capabilities') }}" data-batches-url="{{ url_for('generation_create_batch') }}" data-history-url="{{ url_for('generation_history') }}" hidden>
+  <div class="generation-toolbar">
+    <button type="button" id="generate-paragraph">Gerar parágrafo</button>
+    <div class="generation-model-field">
+      <label for="generation-model" id="generation-model-label">Modelo · OpenRouter</label>
+      <div class="generation-model-controls">
+        <select id="generation-model" aria-describedby="generation-feedback">
+          <option value="">Selecione um modelo</option>
+        </select>
+        <button type="button" id="generation-add-model" class="generation-secondary generation-plus" aria-label="Adicionar modelo" aria-expanded="false" aria-controls="generation-model-panel">+</button>
+      </div>
+      <p id="generation-capabilities-status" class="generation-help" aria-live="polite"></p>
+    </div>
+    <button type="button" id="generation-settings-button" class="generation-secondary" aria-expanded="false" aria-controls="generation-settings">Configurações</button>
+  </div>
+  <div class="generation-options-toolbar">
+    <button type="button" id="generation-parameters-button" class="generation-secondary" aria-expanded="false" aria-controls="generation-parameters">Parâmetros</button>
+    <button type="button" id="generation-surprise" class="generation-secondary" disabled>Surpreenda-me</button>
+    <button type="button" id="generation-history-button" class="generation-secondary" aria-expanded="false" aria-controls="generation-history">Histórico</button>
+  </div>
+  <div id="generation-parameters" class="generation-panel" hidden>
+    <h3>Parâmetros do parágrafo</h3>
+    <p class="generation-help">Escolha os valores ou deixe o sorteio decidir. Em lote, “Variar” distribui opções diferentes entre os itens.</p>
+    <label for="generation-theme">Tema (opcional)</label>
+    <input id="generation-theme" type="text" maxlength="500" placeholder="Deixe em branco para um tema livre" form="generation-controls">
+    <div id="generation-parameter-fields"></div>
+    <div class="generation-runtime-fields">
+    <div class="generation-quantity-field">
+      <label for="generation-quantity">Quantidade de parágrafos</label>
+      <input id="generation-quantity" type="number" min="1" max="20" step="1" value="1" inputmode="numeric" aria-describedby="generation-quantity-help" form="generation-controls" required>
+      <p class="generation-help" id="generation-quantity-help">De 1 a 20. A geração segue os parâmetros atuais. Surpreenda-me sorteia tudo, preserva o tema e gera um único parágrafo.</p>
+    </div>
+    <div id="generation-temperature-field" class="generation-quantity-field" hidden>
+      <label for="generation-temperature">Temperatura</label>
+      <div class="generation-temperature-control">
+        <input id="generation-temperature" type="range" min="0" max="1.2" step="0.05" value="0.8" aria-describedby="generation-temperature-help" form="generation-controls" disabled>
+        <output id="generation-temperature-value" for="generation-temperature">0,8</output>
+      </div>
+      <p class="generation-help" id="generation-temperature-help">De 0 a 1,2. No lote, cada item recebe uma pequena variação de até ±0,15 dentro desses limites.</p>
+    </div>
+    <div>
+      <label for="generation-history-size">Textos recentes para comparação</label>
+      <input id="generation-history-size" type="number" min="1" max="200" step="1" value="50" form="generation-controls" required>
+    </div>
+    <div>
+      <label for="generation-draw-mode">Modo de sorteio</label>
+      <select id="generation-draw-mode" form="generation-controls">
+        <option value="ponderado">Ponderado</option>
+        <option value="uniforme">Uniforme</option>
+      </select>
+    </div>
+    <div>
+      <label for="generation-seed">Seed (opcional)</label>
+      <input id="generation-seed" type="number" step="1" min="-9007199254740991" max="9007199254740991" placeholder="Inteiro para repetir o sorteio" form="generation-controls">
+    </div>
+    <div>
+      <label for="generation-max-attempts">Tentativas por parágrafo</label>
+      <select id="generation-max-attempts" form="generation-controls">
+        <option value="1">1 tentativa</option>
+        <option value="2" selected>Até 2 tentativas</option>
+      </select>
+    </div>
+    </div>
+    <label class="generation-checkbox" for="generation-antirepetition"><input id="generation-antirepetition" type="checkbox" form="generation-controls" checked>Evitar repetir aberturas e vocabulário dos textos recentes</label>
+    <p class="generation-help">Textos inválidos ou semelhantes podem gerar nova tentativa dentro do limite escolhido. Novas tentativas e repetições de rede podem consumir créditos.</p>
+  </div>
+  <p id="generation-parameter-summary" class="generation-help" aria-live="polite">Carregando parâmetros…</p>
+  <div id="generation-model-panel" class="generation-panel" hidden>
+    <label for="generation-new-model">Identificador do modelo</label>
+    <div class="generation-model-controls">
+      <input id="generation-new-model" type="text" maxlength="200" autocomplete="off" spellcheck="false" placeholder="Informe o identificador do modelo">
+      <button type="button" id="generation-save-model">Adicionar</button>
+      <button type="button" id="generation-cancel-model" class="generation-secondary">Cancelar</button>
+    </div>
+    <p class="generation-help" id="generation-model-help">Use o identificador do modelo no OpenRouter. Todos os modelos usam a mesma chave salva.</p>
+    <p id="generation-model-error" class="generation-error" role="alert" hidden></p>
+  </div>
+  <div id="generation-settings" class="generation-panel" hidden>
+    <h3>Configurações da geração</h3>
+    <label for="generation-key">Chave do OpenRouter</label>
+    <input id="generation-key" type="password" autocomplete="off" spellcheck="false" maxlength="4096">
+    <div class="generation-key-actions">
+      <button type="button" id="generation-save-key" class="generation-secondary">Salvar chave</button>
+      <button type="button" id="generation-remove-key" class="generation-secondary">Remover</button>
+      <span id="generation-key-status" class="generation-help">Consultando configuração…</span>
+    </div>
+    <p class="generation-help">Uma única chave do OpenRouter para todos os modelos. A chave fica salva neste servidor local, inclusive após reiniciar o aplicativo. Os identificadores dos modelos ficam salvos neste navegador.</p>
+  </div>
+  <section id="generation-batch" class="generation-panel" aria-labelledby="generation-batch-title" hidden>
+    <div class="generation-panel-heading">
+      <h3 id="generation-batch-title">Geração atual</h3>
+      <div id="generation-export" aria-label="Exportar lote"></div>
+    </div>
+    <p id="generation-progress" class="generation-help" role="status" aria-live="polite"></p>
+    <ul id="generation-batch-warnings" class="generation-warnings" hidden></ul>
+    <details id="generation-metrics" class="generation-metrics" hidden>
+      <summary>Métricas do lote</summary>
+      <dl id="generation-metrics-values"></dl>
+    </details>
+    <ol id="generation-batch-items" class="generation-batch-items"></ol>
+    <div class="generation-key-actions">
+      <button type="button" id="generation-stop" class="generation-secondary" hidden>Parar lote</button>
+      <button type="button" id="generation-resume" class="generation-secondary" hidden>Continuar lote</button>
+    </div>
+  </section>
+  <section id="generation-history" class="generation-panel" aria-labelledby="generation-history-title" hidden>
+    <div class="generation-panel-heading">
+      <h3 id="generation-history-title">Histórico de gerações</h3>
+      <button type="button" id="generation-refresh-history" class="generation-secondary">Atualizar</button>
+    </div>
+    <div class="generation-history-filter">
+      <label for="generation-history-batch">Filtrar por lote</label>
+      <div class="generation-model-controls">
+        <input id="generation-history-batch" type="number" min="1" step="1" placeholder="Todos os lotes" form="generation-controls">
+        <button type="button" id="generation-filter-history" class="generation-secondary">Filtrar</button>
+        <button type="button" id="generation-clear-history" class="generation-secondary">Limpar filtro</button>
+      </div>
+    </div>
+    <p id="generation-history-feedback" class="generation-help" role="status" aria-live="polite"></p>
+    <ul id="generation-history-list" class="generation-history-list"></ul>
+    <button type="button" id="generation-more-history" class="generation-secondary" hidden>Carregar mais</button>
+    <p class="generation-help">Os parâmetros, o prompt, o texto e os metadados ficam no histórico deste servidor em SQLite. A exportação não inclui sua chave.</p>
+  </section>
+  <p class="generation-help">Gera um parágrafo em português por item. Você pode editar o texto a qualquer momento. As chamadas usam sua conta no OpenRouter e podem consumir créditos.</p>
+  <p id="generation-feedback" class="generation-feedback" role="status" aria-live="polite"></p>
+</div>

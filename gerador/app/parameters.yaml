@@ -1,0 +1,173 @@
+versao: '1'
+eixos:
+  tipo_texto:
+    camada: 1
+    valores: [relato, descricao, narracao, dissertacao, explicacao, instrucao, dialogo, opiniao]
+    pesos: {}
+  pessoa:
+    camada: 1
+    valores: [primeira, primeira_plural, segunda, terceira, impessoal]
+  tempo_verbal:
+    camada: 1
+    valores: [passado, presente, futuro]
+  modo_desenvolvimento:
+    camada: 1
+    valores: [definicao, exemplificacao, comparacao, causa_consequencia, enumeracao, autoridade, narracao, descricao]
+  registro:
+    camada: 1
+    valores: [formal, informal, tecnico, literario]
+  tom:
+    camada: 1
+    valores: [neutro, nostalgico, ironico, tenso, leve, serio, bem_humorado]
+  publico:
+    camada: 1
+    valores: [crianca, jovem, adulto, especialista]
+  variante:
+    camada: 1
+    valores: [pt_br, pt_pt]
+    pesos: {pt_br: 0.9, pt_pt: 0.1}
+  tamanho:
+    camada: 2
+    valores: [curto, medio, longo]
+  complexidade_sintatica:
+    camada: 2
+    valores: [simples, mista, complexa]
+  vocabulario:
+    camada: 2
+    valores: [simples, medio, rico]
+  posicao_ideia_central:
+    camada: 2
+    valores: [inicio, fim, diluida]
+  tipo_paragrafo:
+    camada: 2
+    valores: [padrao, enfase, transicao, abertura, conclusao]
+  ousadia:
+    camada: 3
+    valores: [conservadora, equilibrada, ousada]
+rotulos_eixos:
+  tipo_texto: Tipo de texto
+  pessoa: Pessoa do discurso
+  tempo_verbal: Tempo verbal
+  modo_desenvolvimento: Modo de desenvolvimento
+  registro: Registro
+  tom: Tom
+  publico: Público
+  variante: Variante do português
+  tamanho: Tamanho
+  complexidade_sintatica: Complexidade sintática
+  vocabulario: Vocabulário
+  posicao_ideia_central: Posição da ideia central
+  tipo_paragrafo: Tipo de parágrafo
+  ousadia: Ousadia
+rotulos:
+  tipo_texto:
+    relato: um relato (experiência vivida, contada em sequência)
+    descricao: uma descrição (como algo ou alguém é)
+    narracao: uma narração (sequência de acontecimentos)
+    dissertacao: uma dissertação (defesa de uma ideia com argumentos)
+    explicacao: uma explicação (esclarece como ou por que algo acontece)
+    instrucao: uma instrução (orienta passos ou ações)
+    dialogo: um trecho de diálogo narrado em um único parágrafo
+    opiniao: um texto de opinião
+  pessoa:
+    primeira: Primeira pessoa do singular
+    primeira_plural: Primeira pessoa do plural
+    segunda: Segunda pessoa
+    terceira: Terceira pessoa
+    impessoal: Impessoal
+  tempo_verbal: {passado: Passado, presente: Presente, futuro: Futuro}
+  modo_desenvolvimento:
+    definicao: Definição
+    exemplificacao: Exemplificação
+    comparacao: Comparação
+    causa_consequencia: Causa e consequência
+    enumeracao: Enumeração
+    autoridade: Referência de autoridade
+    narracao: Narração
+    descricao: Descrição
+  registro: {formal: Formal, informal: Informal, tecnico: Técnico, literario: Literário}
+  tom: {neutro: Neutro, nostalgico: Nostálgico, ironico: Irônico, tenso: Tenso, leve: Leve, serio: Sério, bem_humorado: Bem-humorado}
+  publico: {crianca: Criança, jovem: Jovem, adulto: Adulto, especialista: Especialista}
+  variante: {pt_br: Português brasileiro, pt_pt: Português europeu}
+  tamanho: {curto: Curto, medio: Médio, longo: Longo}
+  complexidade_sintatica: {simples: Simples, mista: Mista, complexa: Complexa}
+  vocabulario: {simples: Simples, medio: Médio, rico: Rico}
+  posicao_ideia_central: {inicio: No início, fim: No fim, diluida: Diluída ao longo do parágrafo}
+  tipo_paragrafo: {padrao: Padrão, enfase: Ênfase, transicao: Transição, abertura: Abertura, conclusao: Conclusão}
+  ousadia: {conservadora: Conservadora, equilibrada: Equilibrada, ousada: Ousada}
+instrucoes:
+  pessoa:
+    impessoal: Não use um narrador pessoal; formule o texto de maneira impessoal.
+  modo_desenvolvimento:
+    autoridade: Use uma referência geral de autoridade, sem inventar citações ou fontes verificáveis.
+  tipo_paragrafo:
+    transicao: Crie uma passagem entre ideias com contexto suficiente para o parágrafo ser compreensível sozinho.
+    conclusao: Conclua uma ideia com contexto suficiente para o parágrafo ser compreensível sozinho.
+tamanho_frases:
+  curto: [2, 3]
+  medio: [4, 6]
+  longo: [7, 10]
+temperatura: {min: 0.0, max: 1.2, padrao: 0.8, jitter_lote: 0.15}
+frases_ousadia:
+  conservadora: Use construções diretas, imagens familiares e escolhas de estilo discretas.
+  equilibrada: ''
+  ousada: Experimente imagens inesperadas e construções criativas, preservando a clareza e a coerência.
+anti_repeticao: true
+n_historico: 50
+abertura_palavras: 6
+similaridade_ngramas: 3
+limiar_similaridade: 0.4
+max_tentativas: 2
+# "quando" é a conjunção que dispara a regra. "eixo" é o alvo e
+# "valores" são as correções permitidas. "sortear" refaz o sorteio do alvo;
+# "ajustar" escolhe uma das correções. Valores fixos nunca são alterados.
+# Se o alvo for fixo, tenta-se corrigir um eixo sorteado de "quando".
+regras:
+  - id: instrucao_pessoa
+    quando: {tipo_texto: instrucao, pessoa: primeira}
+    acao: ajustar
+    eixo: pessoa
+    valores: [segunda, impessoal]
+    mensagem: Instruções usam segunda pessoa ou uma construção impessoal.
+  - id: relato_pessoa
+    quando: {tipo_texto: relato, pessoa: impessoal}
+    acao: ajustar
+    eixo: pessoa
+    valores: [primeira]
+    mensagem: Relatos usam uma pessoa que possa contar a experiência.
+  - id: relato_tempo
+    quando: {tipo_texto: relato, tempo_verbal: futuro}
+    acao: ajustar
+    eixo: tempo_verbal
+    valores: [passado]
+    mensagem: Relatos apresentam uma experiência já vivida.
+  - id: tecnico_tom
+    quando: {registro: tecnico, tom: bem_humorado}
+    acao: sortear
+    eixo: tom
+    valores: [neutro, nostalgico, ironico, tenso, leve, serio]
+    mensagem: O tom foi compatibilizado com o registro técnico.
+  - id: crianca_vocabulario
+    quando: {publico: crianca, vocabulario: rico}
+    acao: ajustar
+    eixo: vocabulario
+    valores: [simples]
+    mensagem: O vocabulário foi simplificado para o público infantil.
+  - id: crianca_sintaxe
+    quando: {publico: crianca, complexidade_sintatica: complexa}
+    acao: ajustar
+    eixo: complexidade_sintatica
+    valores: [simples]
+    mensagem: A sintaxe foi simplificada para o público infantil.
+  - id: transicao_tamanho
+    quando: {tipo_paragrafo: transicao, tamanho: longo}
+    acao: ajustar
+    eixo: tamanho
+    valores: [curto]
+    mensagem: Parágrafos de transição usam o tamanho curto.
+  - id: enfase_tamanho
+    quando: {tipo_paragrafo: enfase}
+    acao: ajustar
+    eixo: tamanho
+    valores: [curto]
+    mensagem: Parágrafos de ênfase usam o tamanho curto.

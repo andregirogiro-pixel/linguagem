@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='etapas.js') }}" defer></script>
     <script src="{{ url_for('static', filename='vetorizacao.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='geracao.js') }}" defer></script>
   </head>
   <body>
     <div class="page">
@@ -859,10 +860,12 @@
           <p class="notice notice-error" id="form-error" role="alert">{{ error }}</p>
           {% endif %}
 
+          <form id="generation-controls"></form>
           <form method="post" action="{{ url_for('submit_text') }}" accept-charset="UTF-8">
             <label for="content">Seu texto</label>
             <textarea id="content" name="content" rows="12" placeholder="Escreva aqui ou cole seu texto…" required aria-describedby="content-help{% if error %} form-error{% endif %}"{% if error %} aria-invalid="true"{% endif %}>
 {{ content }}</textarea>
+            {% include 'gerador/index.html' %}
             <details class="technical-settings">
               <summary>Preparação técnica opcional</summary>
               <label class="technical-option">

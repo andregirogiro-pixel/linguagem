@@ -53,6 +53,37 @@ clique em **Registrar texto**. A confirmação mostra o identificador do registr
 e a data em horário de Brasília. Atualizar a confirmação não repete o envio.
 Mantenha o terminal aberto durante o uso e pressione `Ctrl+C` para encerrar.
 
+### Gerar um parágrafo para testar
+
+Abaixo do campo **Seu texto**, use **Configurações** para salvar sua chave do
+OpenRouter uma vez. A mesma chave atende todos os modelos adicionados, inclusive
+modelos da OpenAI e da Anthropic disponíveis no OpenRouter. Ela permanece no
+servidor local após reiniciar o aplicativo, no arquivo ignorado pelo Git
+`instance/geracao_chaves.json`, com acesso restrito ao usuário do sistema.
+Você pode substituir ou remover a chave nas configurações. Se `ANALISE_DB`
+definir outra pasta para o banco, o arquivo da chave fica nessa mesma pasta.
+
+O seletor começa vazio. Clique em **+**, informe o identificador exato do modelo
+no OpenRouter e adicione-o. Somente a lista de modelos fica salva no navegador.
+Em **Parâmetros**, escolha os valores dos 14 eixos ou use **Surpreenda-me**.
+Cada eixo aceita uma opção fixa, **Aleatório** ou **Variar** nos lotes de até
+20 itens. Os eixos, valores, pesos e regras ficam em
+[`gerador/app/parameters.yaml`](gerador/app/parameters.yaml), sem precisar
+alterar o código. O tamanho controla a quantidade de frases.
+
+**Gerar parágrafo** acrescenta os textos aceitos ao campo, preservando o texto existente.
+Você pode continuar escrevendo e editar antes de clicar em **Registrar texto**.
+A opção **Histórico** consulta os lotes em SQLite e permite exportar JSON, CSV
+e JSONL com parâmetros, prompt, texto, tentativas e metadados. Você também pode
+definir tema, ousadia, anti-repetição, janela do histórico, semente e modo de
+sorteio. Valores fixos incompatíveis são preservados com aviso. É possível
+copiar, regenerar e aprovar ou reprovar cada resultado. Itens inválidos podem
+ser tentados novamente até o limite selecionado; todas as tentativas ficam no
+mesmo SQLite. A temperatura aparece somente com suporte confirmado do modelo.
+A geração usa sua conta no OpenRouter e pode consumir créditos; o registro e
+as etapas locais continuam disponíveis sem essa configuração.
+Veja a [API FastAPI, configuração e validação do gerador](gerador/README.md).
+
 ## Navegar pelas etapas
 
 Depois de registrar um texto, use as abas **Texto**, **Preparação**,
