@@ -1,0 +1,80 @@
+{% macro literal_fragments(fragments, gap_label='Trecho não incluído nesta oração') -%}
+{% for fragment in fragments %}<span class="segmentation-literal-fragment">{{ fragment }}</span>{% if not loop.last %}<span class="fragment-divider" aria-hidden="true"> […] </span><span class="visually-hidden"> {{ gap_label }}. </span>{% endif %}{% endfor %}
+{%- endmacro %}
+
+{% macro token_analysis(tokens, table_id, caption, has_morphology, has_syntax, in_clause=false) -%}
+{% if tokens %}
+<div class="table-scroll segmentation-analysis-scroll" role="region" aria-labelledby="{{ table_id }}-caption" tabindex="0">
+  <table id="{{ table_id }}" class="analysis-table segmentation-token-table{% if has_morphology %} has-morphology{% endif %}{% if has_syntax %} has-syntax{% endif %}">
+    <caption id="{{ table_id }}-caption" class="visually-hidden">{{ caption }}</caption>
+    <colgroup><col></colgroup>
+    {% if has_morphology %}<colgroup span="3"></colgroup>{% endif %}
+    {% if has_syntax %}<colgroup span="2"></colgroup>{% endif %}
+    <thead>
+      <tr>
+        <th scope="col"{% if has_morphology or has_syntax %} rowspan="2"{% endif %}>Token</th>
+        {% if has_morphology %}<th scope="colgroup" colspan="3">Análise morfológica</th>{% endif %}
+        {% if has_syntax %}<th scope="colgroup" colspan="2">Análise sintática</th>{% endif %}
+      </tr>
+      {% if has_morphology or has_syntax %}
+      <tr>
+        {% if has_morphology %}
+        <th scope="col">Lema</th>
+        <th scope="col">Classe gramatical</th>
+        <th scope="col">Atributos</th>
+        {% endif %}
+        {% if has_syntax %}
+        <th scope="col">Relação sintática</th>
+        <th scope="col">Palavra de referência</th>
+        {% endif %}
+      </tr>
+      {% endif %}
+    </thead>
+    <tbody>
+      {% for token in tokens %}
+      <tr data-token-id="{{ token.id }}">
+        <th scope="row" class="token-text">{{ token.text }}</th>
+        {% if has_morphology %}
+        <td>{% if token.lemma is none %}<span class="unavailable">Não disponível</span>{% else %}{{ token.lemma }}{% endif %}</td>
+        <td>
+          {% if token.pos_label or token.pos %}
+          {{ token.pos_label or token.pos }}{% if token.pos_label and token.pos %} <span class="segmentation-model-label">({{ token.pos }})</span>{% endif %}
+          {% else %}<span class="unavailable">Não disponível</span>{% endif %}
+        </td>
+        <td>
+          {% if token.morphology is none %}
+          <span class="unavailable">Não disponível</span>
+          {% elif not token.morphology %}
+          <span class="unavailable">Sem atributos</span>
+          {% else %}
+          <dl class="morph-attributes">
+            {% for feature in token.morphology %}
+            <div><dt>{{ feature.label or feature.field }}</dt><dd>{{ feature.value or feature.raw_value }} <span class="segmentation-model-label">({{ feature.field }}={{ feature.raw_value }})</span></dd></div>
+            {% endfor %}
+          </dl>
+          {% endif %}
+        </td>
+        {% endif %}
+        {% if has_syntax %}
+        <td>
+          {% if token.dependency_label or token.dependency %}
+          {{ token.dependency_label or token.dependency }}{% if token.dependency_label and token.dependency %} <span class="segmentation-model-label">({{ token.dependency }})</span>{% endif %}
+          {% else %}<span class="unavailable">Não disponível</span>{% endif %}
+        </td>
+        <td>
+          {% if token.head_text is not none %}
+          <span class="segmentation-literal-fragment">{{ token.head_text }}</span>
+          {% if token.head_is_self %}<span class="segmentation-model-label">(o próprio token)</span>{% endif %}
+          {% else %}<span class="unavailable">Não disponível</span>{% endif %}
+          {% if in_clause and token.head_outside_clause %}<span class="segmentation-outside-head">Cabeça fora desta oração</span>{% endif %}
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="empty-result">Nenhum elemento disponível para esta consulta.</p>
+{% endif %}
+{%- endmacro %}

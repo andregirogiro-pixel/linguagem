@@ -131,12 +131,57 @@ h1 {
 .unit-counts dt { color: var(--muted); font-size: 13px; }
 .unit-counts dd { margin: 0; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.4; }
 .download-link { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; text-underline-offset: 3px; }
+.segmentation-map-link { display: block; width: fit-content; margin-top: 12px; font-size: 14px; font-weight: 600; text-underline-offset: 3px; }
 .segmentation-result .periods-heading { margin-top: 28px; }
+.segmentation-map-help { margin: -4px 0 16px; color: var(--muted); font-size: 14px; }
+.segmentation-clause-state { margin-bottom: 20px; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: #f3f6f0; font-size: 14px; }
+.segmentation-clause-state p { margin: 0 0 6px; }
+.segmentation-clause-state > a { display: inline-block; margin-top: 4px; font-weight: 600; text-underline-offset: 3px; }
+.segmentation-rule-notes { margin-top: 12px; }
+.segmentation-rule-notes summary { color: var(--accent); cursor: pointer; }
+.segmentation-rule-notes ul { margin: 8px 0 0; padding-left: 20px; }
+.segmentation-paragraph { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 9px; }
+.segmentation-paragraph + .segmentation-paragraph { margin-top: 16px; }
+.segmentation-paragraph h4 { margin: 0; font-size: 15px; font-weight: 650; }
+.segmentation-paragraph-content > summary, .segmentation-period > summary { color: var(--accent); cursor: pointer; }
+.segmentation-paragraph-content > summary h4, .segmentation-period > summary h5 { display: inline; color: var(--ink); }
+.segmentation-paragraph-text { margin: 10px 0 18px; font-size: 14px; }
+.segmentation-paragraph-text summary { color: var(--muted); cursor: pointer; }
+.segmentation-paragraph-text .period-text { margin-top: 10px; }
 .period-list { margin: 0; padding-left: 30px; }
-.period-list li { padding: 0 0 18px 6px; }
-.period-list li + li { padding-top: 18px; border-top: 1px solid var(--line); }
-.period-list li:last-child { padding-bottom: 0; }
-.period-list li::marker { color: var(--muted); font-size: 14px; font-weight: 600; }
+.period-list > li { padding: 0 0 18px 6px; }
+.period-list > li + li { padding-top: 18px; border-top: 1px solid var(--line); }
+.period-list > li:last-child { padding-bottom: 0; }
+.period-list > li::marker { color: var(--muted); font-size: 14px; font-weight: 600; }
+.segmentation-period h5 { margin: 0; font-size: 14px; font-weight: 650; }
+.segmentation-period-content { min-width: 0; padding-top: 10px; }
+.segmentation-period-status { margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+.segmentation-clause { min-width: 0; margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fafbf8; scroll-margin-top: var(--stage-navigation-height, 140px); }
+.segmentation-clause > summary { padding: 12px 14px; color: var(--accent); cursor: pointer; }
+.segmentation-clause-label { color: var(--ink); font-size: 14px; font-weight: 650; }
+.segmentation-clause-preview { display: block; margin: 3px 0 0 18px; color: var(--muted); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.segmentation-clause-content { min-width: 0; padding: 0 14px 14px; }
+.segmentation-clause:target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--success); }
+.segmentation-fragment-label { margin: 0 0 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.segmentation-clause-fragments { margin: 0; padding: 10px 12px; border-left: 2px solid var(--accent); background: var(--paper); }
+.segmentation-literal-fragment { white-space: pre-wrap; overflow-wrap: anywhere; }
+.segmentation-scope-pending { margin: 0; color: #873127; font-size: 14px; font-weight: 600; }
+.segmentation-nucleus { margin: 12px 0; font-size: 13px; }
+.segmentation-clause-relations, .segmentation-clause-notes { margin: 12px 0; padding-left: 20px; font-size: 13px; }
+.segmentation-clause-relations li + li, .segmentation-clause-notes li + li { margin-top: 6px; }
+.segmentation-clause-notes { color: #873127; }
+.segmentation-clause-evidence, .segmentation-clause-explanation, .segmentation-analyses { margin-top: 14px; font-size: 13px; }
+.segmentation-clause-evidence summary, .segmentation-clause-explanation summary, .segmentation-analyses summary { color: var(--accent); cursor: pointer; }
+.segmentation-clause-evidence p, .segmentation-clause-explanation p { margin: 8px 0 0; }
+.segmentation-analysis-note { margin: 8px 0; color: var(--muted); font-size: 12px; }
+.segmentation-analysis-scroll { margin-top: 10px; background: var(--paper); }
+.segmentation-token-table { min-width: 420px; }
+.segmentation-token-table.has-morphology { min-width: 660px; }
+.segmentation-token-table.has-morphology.has-syntax { min-width: 900px; }
+.segmentation-token-table thead tr + tr th { border-top: 1px solid var(--line); }
+.segmentation-token-table tbody th { border-top: 1px solid var(--line); background: none; color: var(--ink); font-size: 13px; vertical-align: top; }
+.segmentation-model-label { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.segmentation-outside-head { display: block; margin-top: 4px; color: #873127; font-size: 11px; }
 .period-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .period-location { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .period-location summary, .segmentation-history summary, .preparation-history summary, .annotation-history summary, .analysis-history summary { cursor: pointer; }
@@ -374,6 +419,12 @@ button:hover { background: #1e483d; }
   .unit-counts > div { padding: 10px; }
   .unit-counts dd { font-size: 24px; }
   .unit-counts dt { font-size: 12px; }
+  .segmentation-paragraph { padding: 12px; }
+  .segmentation-paragraph .period-list { padding-left: 20px; }
+  .segmentation-paragraph .period-list > li { padding-left: 2px; }
+  .segmentation-clause > summary { padding: 10px; }
+  .segmentation-clause-content { padding: 0 10px 10px; }
+  .segmentation-clause-preview { margin-left: 0; }
   .form-footer { flex-direction: column; align-items: stretch; gap: 16px; }
   .notice-success { flex-wrap: wrap; gap: 10px; }
   .new-text { margin-left: 40px; }

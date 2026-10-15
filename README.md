@@ -65,6 +65,20 @@ A barra facilita alternar entre as etapas durante a leitura. O endereço
 identifica a aba selecionada e permite voltar ou avançar pelo histórico do navegador.
 Sem JavaScript, os links continuam disponíveis e as etapas aparecem na página.
 
+Na aba **Segmentação**, o **Mapa do texto** organiza a leitura em
+**parágrafo → período → oração**, com níveis que podem ser abertos e recolhidos.
+Cada oração reúne as análises morfológicas e sintáticas das suas palavras,
+o núcleo identificado e os vínculos de coordenação ou subordinação disponíveis.
+Gere as etapas **Morfologia**, **Sintaxe** e **Regras** para completar o mapa;
+o link **Ver no mapa da segmentação** permite voltar a essa leitura.
+Antes disso, o mapa mostra os parágrafos, os períodos e as análises já salvas,
+indicando a próxima etapa necessária.
+
+Os trechos separados de uma oração aparecem com `[…]` entre eles. A tela
+respeita os alcances registrados, inclusive quando sua extensão ainda não foi
+determinada, e permite consultar os demais elementos do período. Abrir o mapa
+não executa novamente os modelos nem altera os registros ou suas exportações.
+
 Se a vetorização terminar enquanto você consulta outra aba, suas edições
 permanecem na página. Abra **Vetores** e use **Ver resultado da vetorização**
 para consultar a execução concluída.

@@ -12,6 +12,7 @@ from flask import Flask, Response, abort, redirect, render_template, request, ur
 
 from preparacao import ErroPreparacao, preparar_texto, validar_registro
 from segmentacao import ErroSegmentacao, contexto_periodo, segmentar_preparacao, validar_segmentacao
+from visualizacao_segmentacao import construir_visualizacao_segmentacao
 from anotacao import (
     ErroAlinhamento, ErroAnotacao, ErroLimite, ErroModelo, anotar_segmentacao, validar_anotacao,
 )
@@ -669,9 +670,12 @@ def create_app(config=None):
         record["created_at"] = datetime.fromisoformat(record["created_at"]).astimezone(
             ZoneInfo("America/Sao_Paulo")
         ).strftime("%d/%m/%Y às %H:%M:%S")
+        segmentation_view = construir_visualizacao_segmentacao(segmented, annotated, analyzed, ruled)
         return render_template(
             "index.html", content=row["content"], error=None, record=record, prepared=prepared,
             segmented=segmented, segmentation_history=[dict(item) for item in history],
+            segmentation_view=segmentation_view,
+            segmentation_paragraphs=segmentation_view["paragraphs"],
             preparation_history=[dict(item) for item in preparation_history],
             annotated=annotated, annotation_history=[dict(item) for item in annotation_history],
             analyzed=analyzed, analysis_history=[dict(item) for item in analysis_history],

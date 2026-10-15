@@ -1,3 +1,4 @@
+{% from '_analises_segmentacao.html' import literal_fragments, token_analysis %}
 <!doctype html>
 <html lang="pt-BR">
   <head>
@@ -128,22 +129,117 @@
             </dl>
             <a class="download-link" href="{{ url_for('segmentation_json', record_id=record.id, segmentacao_id=segmented.segmentacao_id) }}">Baixar segmentação JSON <span aria-hidden="true">↓</span></a>
 
-            <h3 class="periods-heading">Períodos</h3>
-            {% if segmented.periodos %}
-            <ol class="period-list">
-              {% for periodo in segmented.periodos %}
-              <li>
-                <p class="period-text">{{ periodo.texto }}</p>
-                <details class="period-location">
-                  <summary>Localização no texto de trabalho</summary>
-                  <p>Caracteres {{ periodo.trabalho.inicio }} a {{ periodo.trabalho.fim }}. A contagem começa em zero e o limite final é exclusivo.</p>
+            <h3 class="periods-heading">Mapa do texto</h3>
+            <p class="segmentation-map-help">Consulte os parágrafos, seus períodos e as orações disponíveis. Abra cada oração para ver suas análises.</p>
+            {% set clause_states = {'pendente': 'Aguardando análise', 'executada': 'Concluída', 'executada_com_pendencias': 'Concluída com pendências', 'impedida': 'Impedida', 'falhou': 'Falha na execução', 'desabilitada': 'Desabilitada'} %}
+            {% set next_stage_names = {'morfologia': 'Morfologia', 'sintaxe': 'Sintaxe', 'regras': 'Regras'} %}
+            <div class="segmentation-clause-state" data-clause-state="{{ segmentation_view.clause_state }}">
+              <p><strong>Identificação de orações: {{ clause_states.get(segmentation_view.clause_state, 'Não disponível') }}</strong></p>
+              <p>{{ segmentation_view.clause_message }}</p>
+              {% if segmentation_view.next_stage %}
+              <a href="#etapa-{{ segmentation_view.next_stage }}" data-stage-link>Ir para {{ next_stage_names.get(segmentation_view.next_stage, segmentation_view.next_stage) }} <span aria-hidden="true">→</span></a>
+              {% endif %}
+              {% if segmentation_view.rule_notes %}
+              <details class="segmentation-rule-notes">
+                <summary>Observações da identificação de orações</summary>
+                <ul>{% for note in segmentation_view.rule_notes %}<li>{{ note }}</li>{% endfor %}</ul>
+              </details>
+              {% endif %}
+            </div>
+            {% for group in segmentation_view.paragraphs %}
+            {% set paragraph = group.paragraph %}
+            <article class="segmentation-paragraph" data-paragraph-id="{{ paragraph.id }}" aria-labelledby="segmentation-paragraph-title-{{ paragraph.ordem + 1 }}">
+              <details class="segmentation-paragraph-content" open>
+                <summary><h4 id="segmentation-paragraph-title-{{ paragraph.ordem + 1 }}">Parágrafo {{ paragraph.ordem + 1 }}</h4></summary>
+                <details class="segmentation-paragraph-text">
+                  <summary>Texto completo do parágrafo</summary>
+                  <p class="period-text">{{ paragraph.texto }}</p>
                 </details>
-              </li>
-              {% endfor %}
-            </ol>
+                {% if group.periods %}
+                <ol class="period-list" aria-label="Períodos do parágrafo {{ paragraph.ordem + 1 }}">
+                  {% for period_group in group.periods %}
+                  {% set period = period_group.period %}
+                  <li data-period-id="{{ period.id }}" value="{{ period.ordem + 1 }}">
+                    <details class="segmentation-period" open>
+                      <summary><h5>Período {{ period.ordem + 1 }}</h5></summary>
+                      <div class="segmentation-period-content">
+                        <p class="period-text">{{ period.texto }}</p>
+                        <details class="period-location">
+                          <summary>Localização no texto de trabalho</summary>
+                          <p>Caracteres {{ period.trabalho.inicio }} a {{ period.trabalho.fim }}. A contagem começa em zero e o limite final é exclusivo.</p>
+                        </details>
+                        {% for clause in period_group.clauses %}
+                        <details class="segmentation-clause" id="{{ clause.anchor }}" data-clause-id="{{ clause.id }}">
+                          <summary><span class="segmentation-clause-label">Oração {{ clause.number }}</span><span class="segmentation-clause-preview">{% if clause.scope_resolved %}{{ literal_fragments(clause.fragments) }}{% else %}{{ clause.text }}{% endif %}</span></summary>
+                          <div class="segmentation-clause-content">
+                            {% if clause.scope_resolved %}
+                            <p class="segmentation-fragment-label">Trechos da oração</p>
+                            <p class="segmentation-clause-fragments">{{ literal_fragments(clause.fragments) }}</p>
+                            {% else %}
+                            <p class="segmentation-scope-pending">Extensão da oração não determinada</p>
+                            {% endif %}
+                            {% if clause.nucleus_text %}<p class="segmentation-nucleus"><strong>Núcleo identificado:</strong> <span class="segmentation-literal-fragment">{{ clause.nucleus_text }}</span></p>{% endif %}
+                            {% if clause.relations %}
+                            <ul class="segmentation-clause-relations">
+                              {% for relation in clause.relations %}
+                              <li>{{ relation.label }}: {% if relation.anchor %}<a href="#{{ relation.anchor }}">{% if relation.number is not none %}Oração {{ relation.number }}{% else %}Ver oração relacionada{% endif %}</a>{% else %}<span class="unavailable">Oração de referência não disponível</span>{% endif %}</li>
+                              {% endfor %}
+                            </ul>
+                            {% endif %}
+                            {% if clause.notes %}<ul class="segmentation-clause-notes">{% for note in clause.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+                            {% if clause.evidence_fragments %}
+                            <details class="segmentation-clause-evidence">
+                              <summary>Evidências da identificação</summary>
+                              <p>{{ literal_fragments(clause.evidence_fragments, 'Trecho não incluído na evidência') }}</p>
+                            </details>
+                            {% endif %}
+                            {% if clause.explanation %}
+                            <details class="segmentation-clause-explanation">
+                              <summary>Como esta oração foi identificada</summary>
+                              <p>{{ clause.explanation }}</p>
+                            </details>
+                            {% endif %}
+                            <details class="segmentation-analyses">
+                              <summary>{% if clause.scope_resolved %}Análises desta oração{% else %}Análises dos elementos identificados{% endif %}</summary>
+                              {{ token_analysis(clause.tokens, clause.anchor ~ '-analises', ('Análises da oração ' if clause.scope_resolved else 'Análises dos elementos identificados na oração ') ~ clause.number ~ ' do período ' ~ (period.ordem + 1), segmentation_view.has_morphology, segmentation_view.has_syntax, clause.scope_resolved) }}
+                            </details>
+                          </div>
+                        </details>
+                        {% else %}
+                        {% if segmentation_view.clause_state == 'executada' %}
+                        <p class="segmentation-period-status">Nenhuma oração identificada neste período.</p>
+                        {% elif segmentation_view.clause_state == 'executada_com_pendencias' %}
+                        <p class="segmentation-period-status">Nenhuma oração disponível neste período. A identificação tem pendências.</p>
+                        {% else %}
+                        <p class="segmentation-period-status">As orações deste período ainda não estão disponíveis. Consulte o estado da identificação acima.</p>
+                        {% endif %}
+                        {% if segmentation_view.has_morphology or segmentation_view.has_syntax %}
+                        <details class="segmentation-analyses">
+                          <summary>Análises do período</summary>
+                          {{ token_analysis(period_group.tokens, 'seg-periodo-' ~ (period.ordem + 1) ~ '-analises', 'Análises do período ' ~ (period.ordem + 1), segmentation_view.has_morphology, segmentation_view.has_syntax) }}
+                        </details>
+                        {% endif %}
+                        {% endfor %}
+                        {% if period_group.clauses and period_group.unassigned_tokens %}
+                        <details class="segmentation-analyses segmentation-other-elements">
+                          <summary>Outros elementos do período</summary>
+                          <p class="segmentation-analysis-note">Estes elementos continuam disponíveis. Eles podem fazer parte de orações cuja extensão ainda não foi determinada.</p>
+                          {{ token_analysis(period_group.unassigned_tokens, 'seg-periodo-' ~ (period.ordem + 1) ~ '-outros', 'Outros elementos do período ' ~ (period.ordem + 1), segmentation_view.has_morphology, segmentation_view.has_syntax) }}
+                        </details>
+                        {% endif %}
+                      </div>
+                    </details>
+                  </li>
+                  {% endfor %}
+                </ol>
+                {% else %}
+                <p class="empty-result">Nenhum período identificado neste parágrafo.</p>
+                {% endif %}
+              </details>
+            </article>
             {% else %}
-            <p class="empty-result">Nenhum período identificado neste texto de trabalho.</p>
-            {% endif %}
+            <p class="empty-result">Nenhum parágrafo ou período identificado neste texto de trabalho.</p>
+            {% endfor %}
           </div>
           {% endif %}
 
@@ -189,6 +285,7 @@
               </div>
             </dl>
             <a class="download-link" href="{{ url_for('annotation_json', record_id=record.id, anotacao_id=annotated.anotacao_id) }}">Baixar anotações JSON <span aria-hidden="true">↓</span></a>
+            <a class="segmentation-map-link" href="#etapa-segmentacao" data-stage-link>Ver no mapa da segmentação <span aria-hidden="true">→</span></a>
 
             <h3 id="token-annotations-title" class="annotation-table-title">Anotações dos tokens</h3>
             <div class="table-scroll" role="region" aria-labelledby="token-annotations-title" tabindex="0">
@@ -341,6 +438,7 @@
               </div>
             </dl>
             <a class="download-link" href="{{ url_for('analysis_json', record_id=record.id, analise_id=analyzed.analise_id) }}">Baixar análise JSON <span aria-hidden="true">↓</span></a>
+            <a class="segmentation-map-link" href="#etapa-segmentacao" data-stage-link>Ver no mapa da segmentação <span aria-hidden="true">→</span></a>
 
             <h3 class="annotation-table-title">Relações sintáticas por período</h3>
             {% for period in source_segmentation.periodos %}
@@ -487,6 +585,7 @@
             <p class="notice notice-error" role="status">Execução salva com diagnóstico incompleto. Ainda não está pronta para a etapa 08. Consulte o estado das regras abaixo.</p>
             {% endif %}
             <a class="download-link" href="{{ url_for('rules_json', record_id=record.id, execucao_id=ruled.execucao_id) }}">Baixar regras JSON <span aria-hidden="true">↓</span></a>
+            <a class="segmentation-map-link" href="#etapa-segmentacao" data-stage-link>Ver no mapa da segmentação <span aria-hidden="true">→</span></a>
 
             <details class="rule-catalogue">
               <summary>Catálogo e estado de cada regra</summary>

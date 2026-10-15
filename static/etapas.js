@@ -17,9 +17,11 @@
     ["preparacao_id", "preparacao"],
   ];
   let activeStage = null;
+  const isClauseAnchor = (hash) => /^#seg-oracao-\d+-\d+$/.test(hash);
 
   const stageFromUrl = () => {
     const url = new URL(window.location.href);
+    if (isClauseAnchor(url.hash)) return "segmentacao";
     const hashStage = url.hash.startsWith("#etapa-") ? url.hash.slice(7) : null;
     if (stages.has(hashStage)) return hashStage;
     const selection = queryStages.find(([parameter]) => url.searchParams.has(parameter));
@@ -101,14 +103,27 @@
     select(tabs[next].dataset.stageTab, { focus: true, scroll: true, remember: true });
   });
 
+  const revealClause = () => {
+    if (!isClauseAnchor(window.location.hash)) return;
+    const clause = document.getElementById(window.location.hash.slice(1));
+    if (!clause) return;
+    for (let node = clause; node && node !== panels.get("segmentacao"); node = node.parentElement) {
+      if (node.tagName === "DETAILS") node.open = true;
+    }
+    const summary = clause.querySelector("summary");
+    if (summary) summary.scrollIntoView({ block: "start", behavior: "auto" });
+  };
+
   const restore = () => {
     const stage = stageFromUrl();
-    if (stage !== activeStage) select(stage, { scroll: true });
+    if (stage !== activeStage) select(stage, { scroll: !isClauseAnchor(window.location.hash) });
+    revealClause();
   };
   window.addEventListener("popstate", restore);
   window.addEventListener("hashchange", restore);
   select(stageFromUrl(), { scroll: window.location.hash.startsWith("#etapa-") });
+  revealClause();
   const url = new URL(window.location.href);
-  url.hash = `etapa-${activeStage}`;
+  if (!isClauseAnchor(url.hash)) url.hash = `etapa-${activeStage}`;
   window.history.replaceState(window.history.state, "", url);
 })();
