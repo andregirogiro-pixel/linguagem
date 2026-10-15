@@ -18,8 +18,8 @@
   };
   const available = (value, fallback = "Não disponível") => value === null || value === undefined || value === "" ? fallback : value;
   const nativeLabel = (value) => element("code", "", value);
-  const relationLabel = (value) => ({ coordenacao: "Coordenação", subordinacao: "Subordinação" })[value] || value;
   const tokenText = (ids, words) => (ids || []).map((id) => words.get(id)?.texto || id).join(" ") || "Não determinado";
+  const isPunctuation = (text) => Boolean(text) && /^[\p{P}\s]+$/u.test(text);
   const morphologyText = (features) => {
     const labels = { Gender: "Gênero", Number: "Número", Person: "Pessoa", Tense: "Tempo", Mood: "Modo", VerbForm: "Forma verbal", Definite: "Definição", PronType: "Tipo de pronome", Case: "Caso", Voice: "Voz", Degree: "Grau" };
     const values = {
@@ -42,6 +42,13 @@
     const list = element("dl", "hierarchy-attributes");
     attribute(list, "Classe gramatical", available(word.classe, "Não determinada"));
     attribute(list, "Função sintática", available(word.funcao_sintatica, "Não determinada"));
+    attribute(list, "Lema", available(word.lema));
+    attribute(list, "Morfologia", morphologyText(word.morfologia) || "Sem atributos registrados");
+    return list;
+  };
+  const morphologyAttributes = (word) => {
+    const list = element("dl", "hierarchy-attributes");
+    attribute(list, "Classe gramatical", available(word.classe, "Não determinada"));
     attribute(list, "Lema", available(word.lema));
     attribute(list, "Morfologia", morphologyText(word.morfologia) || "Sem atributos registrados");
     return list;
@@ -111,44 +118,113 @@
     }
     return list;
   };
-
-  const renderClauses = (clauses, words, parent = null, ancestors = new Set()) => {
+  const ownWords = (clause, words) => (clause.token_ids_leitura || clause.token_ids || [])
+    .map((id) => words.get(id)).filter((word) => word && !isPunctuation(word.texto));
+  const renderMorphology = (clause, words) => {
+    const morphology = details("hierarchy-morphology", "Análise morfológica");
+    const rows = Array.isArray(clause.morfologia) ? clause.morfologia : ownWords(clause, words).map((word) => {
+      const display = word.revisao || word;
+      return { ...display, token_id: word.token_id, texto: word.texto, resumo: morphologyText(display.morfologia) };
+    });
+    const list = element("div", "hierarchy-panel-body hierarchy-analysis-rows hierarchy-morphology-rows");
+    for (const row of rows) {
+      if (isPunctuation(row.texto)) continue;
+      const word = words.get(row.token_id) || row;
+      const display = word.revisao || word;
+      const node = details("hierarchy-word hierarchy-morphology-word", "");
+      node.dataset.tokenId = row.token_id;
+      node.firstChild.className = "hierarchy-analysis-row";
+      const classification = element("span", "hierarchy-analysis-classification");
+      classification.append(element("strong", "", row.composicao || available(row.classe, "Classe não determinada")));
+      if (row.resumo) classification.append(element("span", "", row.resumo));
+      if (word.revisao) classification.append(element("span", "hierarchy-label", "Com revisão"));
+      node.firstChild.append(element("span", "hierarchy-analysis-text", row.texto), classification);
+      const body = element("div", "hierarchy-word-body");
+      body.append(morphologyAttributes(display));
+      if (word.revisao) {
+        const review = details("hierarchy-review", "Revisão gramatical e justificativas");
+        for (const reason of display.justificativas || (display.justificativa ? [display.justificativa] : [])) {
+          review.append(element("p", "hierarchy-review-note", reason));
+        }
+        body.append(review);
+        const original = details("hierarchy-original", "Previsão original do modelo");
+        original.append(morphologyAttributes(word), wordTechnical(word, words));
+        body.append(original);
+      } else body.append(wordTechnical(word, words));
+      for (const warning of [...(word.avisos || []), ...(word.alertas_revisao || [])]) body.append(element("p", "hierarchy-help", warning));
+      node.append(body);
+      list.append(node);
+    }
+    if (!list.children.length) list.append(element("p", "hierarchy-help", "Nenhuma palavra identificada nesta oração."));
+    morphology.append(list);
+    return morphology;
+  };
+  const renderTerms = (clause, words) => {
+    const list = element("div", "hierarchy-analysis-rows hierarchy-term-rows");
+    // A resposta apresenta os sintagmas completos. O fallback mostra apenas as
+    // funções das palavras salvas, sem inventar agrupamentos ou inferências.
+    const terms = Array.isArray(clause.termos) ? clause.termos : ownWords(clause, words).map((word) => ({
+      texto: word.texto, funcao: (word.revisao || word).funcao_sintatica,
+    }));
+    for (const term of terms) {
+      const row = element("div", "hierarchy-analysis-row");
+      const phrase = element("span", "hierarchy-analysis-text", term.texto);
+      const classification = element("div", "hierarchy-analysis-classification");
+      if (term.funcao) classification.append(element("strong", "hierarchy-term-function", term.funcao));
+      if (term.tipo) classification.append(element("span", "hierarchy-term-type", term.tipo));
+      if (!term.tipo && !term.funcao) classification.append("Classificação não determinada");
+      if (term.inferido) classification.append(element("span", "hierarchy-label", "Inferido pela flexão"));
+      if (term.observacao) classification.append(element("span", "hierarchy-help", term.observacao));
+      row.append(phrase, classification);
+      list.append(row);
+    }
+    if (!list.children.length) list.append(element("p", "hierarchy-help", "Nenhum termo classificado com segurança nesta oração."));
+    return list;
+  };
+  const renderSyntax = (clause, clauses, words) => {
+    const syntax = details("hierarchy-syntax", "Análise sintática");
+    const body = element("div", "hierarchy-panel-body");
+    const classification = element("div", "hierarchy-classification");
+    classification.append(element("strong", "", clause.classificacao || clause.rotulo || "Classificação não determinada"));
+    for (const relation of clause.relacoes || []) {
+      const target = clauses.find((other) => other.id === relation.alvo_oracao_id);
+      const label = { coordenacao: "Coordenada com", subordinacao: "Subordinada à" }[relation.tipo] || "Relacionada à";
+      const targetText = target ? `oração ${target.numero || clauses.indexOf(target) + 1} (${target.classificacao || target.rotulo || "Classificação não determinada"})` : "oração não identificada";
+      classification.append(element("p", "", `${label} ${targetText}`));
+    }
+    body.append(classification, element("h5", "hierarchy-section-title", "Termos da oração e sintagmas"), renderTerms(clause, words));
+    const evidence = details("hierarchy-technical", "Relações e evidências sintáticas");
+    if (clause.justificativa) evidence.append(element("p", "hierarchy-review-note", clause.justificativa));
+    const verbal = element("dl", "hierarchy-attributes");
+    attribute(verbal, "Núcleo verbal", tokenText(clause.nucleo_token_ids, words));
+    attribute(verbal, "Grupo verbal", tokenText(clause.grupo_verbal_token_ids, words));
+    if (clause.tempo_composto) attribute(verbal, "Tempo do grupo verbal", clause.tempo_composto);
+    const connectives = clause.conectivo_token_ids || clause.conectivos_token_ids || [];
+    if (connectives.length) attribute(verbal, "Conectivos", tokenText(connectives, words));
+    evidence.append(verbal);
+    const tokens = new Set(clause.token_ids_leitura || clause.token_ids || []);
+    if (Array.isArray(clause.raizes)) evidence.append(renderForest(clause.raizes, words, tokens));
+    for (const warning of clause.avisos || []) evidence.append(element("p", "hierarchy-help", warning));
+    body.append(evidence);
+    syntax.append(body);
+    return syntax;
+  };
+  const renderClauses = (clauses, words) => {
     const list = element("ol", "hierarchy-clauses");
     for (const [index, clause] of clauses.entries()) {
-      if ((clause.pai_oracao_id || null) !== parent || ancestors.has(clause.id)) continue;
       const item = element("li");
-      const node = details("hierarchy-clause", `Oração ${clause.numero || index + 1}`);
+      const node = details("hierarchy-clause", "");
       node.dataset.oracaoId = clause.id;
-      node.firstChild.append(element("span", "hierarchy-label", clause.classificacao || clause.rotulo));
       const spans = clause.trechos_leitura || clause.trechos || [];
-      for (const span of spans) node.append(element("p", "period-text hierarchy-clause-text", span.texto));
-      if (spans.length > 1) node.append(element("p", "hierarchy-help", "Esta oração ocupa trechos descontínuos no período."));
-      if (clause.justificativa) node.append(element("p", "hierarchy-review-note", clause.justificativa));
-      const verbal = element("dl", "hierarchy-attributes");
-      attribute(verbal, "Núcleo verbal", tokenText(clause.nucleo_token_ids, words));
-      attribute(verbal, "Grupo verbal", tokenText(clause.grupo_verbal_token_ids, words));
-      if (clause.tempo_composto) attribute(verbal, "Tempo do grupo verbal", clause.tempo_composto);
-      const connectives = clause.conectivo_token_ids || clause.conectivos_token_ids || [];
-      if (connectives.length) attribute(verbal, "Conectivos", tokenText(connectives, words));
-      node.append(verbal);
-      if ((clause.relacoes || []).length) {
-        const relations = element("ul", "hierarchy-relations");
-        for (const relation of clause.relacoes) {
-          const target = clauses.findIndex((other) => other.id === relation.alvo_oracao_id);
-          relations.append(element("li", "", `${relationLabel(relation.tipo)} com ${target < 0 ? "oração não identificada" : `oração ${clauses[target].numero || target + 1}`}`));
-        }
-        node.append(relations);
-      }
-      const syntax = details("hierarchy-syntax", "Análise sintática · sintagmas e palavras");
-      syntax.append(element("p", "hierarchy-help", "Aqui aparecem apenas constituintes e palavras desta oração. Constituintes que atravessam outras orações ficam na árvore completa do período."));
-      const tokens = new Set(clause.token_ids_leitura || clause.token_ids);
-      const roots = clause.raizes || [...tokens].filter((id) => words.has(id)).map((id) => ({tipo: "palavra", token_id: id}));
-      syntax.append(renderForest(roots, words, tokens));
-      for (const warning of clause.avisos || []) syntax.append(element("p", "hierarchy-help", warning));
-      node.append(syntax);
-      if (clauses.some((child) => child.pai_oracao_id === clause.id)) {
-        node.append(renderClauses(clauses, words, clause.id, new Set([...ancestors, clause.id])));
-      }
+      node.firstChild.append(element("span", "hierarchy-number", `Oração ${clause.numero || index + 1}`),
+        element("span", "hierarchy-preview", spans.map((span) => span.texto).join(" … ")));
+      const body = element("div", "hierarchy-clause-body");
+      for (const span of spans) body.append(element("p", "period-text hierarchy-clause-text", span.texto));
+      if (spans.length > 1) body.append(element("p", "hierarchy-help", "Esta oração ocupa trechos descontínuos no período."));
+      const panels = element("div", "hierarchy-clause-panels");
+      panels.append(renderSyntax(clause, clauses, words), renderMorphology(clause, words));
+      body.append(panels);
+      node.append(body);
       item.append(node);
       list.append(item);
     }
@@ -163,16 +239,14 @@
     const fragment = document.createDocumentFragment();
     const words = new Map((view.palavras || data.palavras).map((word) => [word.token_id, word]));
     const clauses = view.oracoes || data.oracoes;
-    const overview = element("p", "hierarchy-overview");
-    overview.append(element("strong", "", `${clauses.length} ${clauses.length === 1 ? "oração identificada" : "orações identificadas"}`),
-      element("span", "hierarchy-label", `${data.palavras.length} tokens no período`));
-    fragment.append(overview);
-    fragment.append(element("p", "hierarchy-help", "Análise estrutural de modelos com revisão por regras explícitas, sujeita a conferência. Orações coordenadas aparecem no mesmo nível; subordinadas ficam sob sua oração de referência."));
-    if (clauses.length) fragment.append(element("h4", "hierarchy-diagram-title", "Relações entre orações"), renderClauses(clauses, words));
+    if (clauses.length) {
+      const group = element("section", "hierarchy-clause-group");
+      group.append(element("h4", "hierarchy-section-title", "Orações"), renderClauses(clauses, words));
+      fragment.append(group);
+    }
     else {
       fragment.append(element("p", "hierarchy-help", "Nenhuma oração com núcleo verbal foi identificada."));
-      const roots = view.raizes || [...words.keys()].map((id) => ({tipo: "palavra", token_id: id}));
-      fragment.append(renderForest(roots, words, new Set(words.keys())));
+      fragment.append(renderMorphology({ token_ids: [...words.keys()], morfologia: view.morfologia_periodo }, words));
     }
     const complete = details("hierarchy-complete hierarchy-technical", "Árvore completa e dados do modelo");
     complete.append(element("p", "hierarchy-help", "A árvore original reúne todo o período e pode divergir das dependências. As etiquetas e previsões abaixo são preservadas para conferência."));
@@ -185,7 +259,6 @@
     const rawDownload = element("a", "download-link hierarchy-download", "Baixar dados originais do modelo JSON ↓");
     rawDownload.href = downloadUrl.href;
     complete.append(rawDownload);
-    fragment.append(complete);
     const method = details("hierarchy-method", "Método e limites da análise");
     method.append(element("p", "hierarchy-help", "Os constituintes preservam os encaixes propostos pelo analisador adicional. A visão de cada oração inclui apenas nós inteiros que pertencem a ela; não recorta sintagmas para criar constituintes novos. A revisão explicita regras aplicadas e mantém as previsões originais disponíveis. Relações da oração e funções de suas palavras são apresentadas separadamente."));
     const provenance = element("dl", "hierarchy-attributes");
@@ -199,12 +272,29 @@
       for (const warning of warnings) list.append(element("li", "", warning));
       method.append(list);
     }
+    fragment.append(complete);
     fragment.append(method);
     const download = element("a", "download-link hierarchy-download hierarchy-reviewed-download", "Baixar análise revisada JSON ↓");
     downloadUrl.searchParams.set("visualizacao", "1");
     download.href = downloadUrl.href;
     fragment.append(download);
     return fragment;
+  };
+
+  const updateClauseCounts = (panel, count) => {
+    panel.dataset.hierarchyClauseCount = String(count);
+    const periodCount = panel.querySelector("[data-hierarchy-clause-count]");
+    if (periodCount) periodCount.textContent = String(count);
+    const paragraph = panel.closest("[data-hierarchy-paragraph]");
+    if (!paragraph) return;
+    const periods = [...paragraph.querySelectorAll("[data-hierarchy-period]")];
+    const analyzed = periods.filter((period) => period.hasAttribute("data-hierarchy-clause-count"));
+    const total = analyzed.reduce((sum, period) => sum + Number(period.dataset.hierarchyClauseCount), 0);
+    const paragraphCount = paragraph.querySelector("[data-hierarchy-paragraph-clause-count]");
+    const coverage = paragraph.querySelector("[data-hierarchy-paragraph-analyzed-count]");
+    const complete = analyzed.length === periods.length;
+    if (paragraphCount) paragraphCount.textContent = complete ? String(total) : `${total} identificadas`;
+    if (coverage) coverage.textContent = complete ? "Todos os períodos analisados" : `${analyzed.length} de ${periods.length} períodos analisados`;
   };
 
   for (const panel of document.querySelectorAll("[data-hierarchy-period]")) {
@@ -240,11 +330,13 @@
           throw new Error(typeof error === "string" ? error : (error?.mensagem || `Não foi possível preparar a análise (HTTP ${response.status}).`));
         }
         const hierarchy = data.hierarquia || data;
-        result.replaceChildren(renderResult(hierarchy, panel.dataset.hierarchyUrl, data.visualizacao));
+        const rendered = renderResult(hierarchy, panel.dataset.hierarchyUrl, data.visualizacao);
+        result.replaceChildren(rendered);
+        updateClauseCounts(panel, (data.visualizacao || hierarchy).oracoes.length);
         state = "saved";
         panel.dataset.hierarchyLoaded = "true";
         status.dataset.state = "saved";
-        status.textContent = "Análise estrutural salva. Abra uma oração para explorar sua sintaxe.";
+        status.textContent = "Análise estrutural salva. Abra uma oração para consultar a sintaxe e a morfologia.";
       } catch (error) {
         state = "error";
         status.dataset.state = "error";

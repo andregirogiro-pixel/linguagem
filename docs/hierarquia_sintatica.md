@@ -1,7 +1,10 @@
 # Segmentação: navegação por níveis
 
 A aba **Segmentação** organiza os resultados como parágrafos → períodos →
-orações → constituintes → palavras. Os parágrafos e períodos começam
+orações. Cada oração oferece as caixas irmãs **Análise sintática** e
+**Análise morfológica**, que abrem de forma independente. A primeira contém
+classificação, relações, termos, sintagmas e funções; a segunda contém
+palavras, classes e atributos morfológicos. Os parágrafos e períodos começam
 recolhidos. A quantidade de parágrafos vem do texto; a restrição de dois
 parágrafos do Agente Analista não se aplica ao Língua.
 
@@ -82,6 +85,24 @@ reutiliza morfologia e sintaxe da origem selecionada, ou gera essas etapas
 antes de analisar os constituintes do período. Consultas GET nunca executam
 o modelo ou criam registros.
 
+O parágrafo exibe seu texto completo, com destaques discretos para os
+períodos. As orações aparecem no mesmo nível, numeradas pelo primeiro token
+próprio no texto, inclusive quando uma oração ocupa trechos descontínuos.
+A relação com a oração principal ou coordenada é indicada dentro da caixa
+sintática, com o número da oração de destino. Não há encaixe visual de uma
+oração dentro de outra nessa navegação.
+
+As contagens de palavras usam unidades separadas por espaço que contêm
+letra ou número: “à”, “guarda-chuva” e “dizê-lo” contam uma vez cada;
+pontuação isolada não conta. Caracteres são pontos de código Unicode,
+incluindo espaços e pontuação. Assim, “Quando cheguei à biblioteca, percebi
+que havia esquecido o caderno em casa.” tem 12 palavras e 75 caracteres.
+O total oracional do parágrafo só é definitivo depois da análise de todos
+os períodos; antes disso, a interface informa o subtotal identificado e
+quantos períodos foram analisados. Um período analisado com zero orações
+também conta como concluído. A localização dos caracteres aparece recolhida
+ao final de cada período, após os resultados e controles.
+
 O Stanza recebe a lista de tokens existente, com tokenização prévia e sem
 expansão de contrações. Suas folhas precisam reproduzir exatamente os textos
 e a ordem dos tokens. Divergência de tokenização é erro de alinhamento;
@@ -95,7 +116,8 @@ próprios limites de documento.
 Orações são propostas a partir dos predicados e dependências do spaCy.
 Auxiliares e cópulas associados não são contados como novas orações. Os
 vínculos preservam as dependências originais e distinguem coordenação de
-subordinação. Coordenadas aparecem como irmãs no diagrama. Elipses e todos
+subordinação. Essas relações são preservadas mesmo com a apresentação plana
+das orações. Elipses e todos
 os subtipos tradicionais não são recuperados por esse método.
 
 As duas análises têm origens distintas: dependências sustentam as propostas
@@ -144,6 +166,21 @@ leitura substantiva objetiva direta. Outras classificações ficam nas previsõe
 originais, sem afirmar que todos os subtipos foram resolvidos. Auxiliar
 “haver/ter” no imperfeito do indicativo com particípio recebe a identificação
 do mais-que-perfeito composto do indicativo.
+
+`apresentacao_segmentacao.py` acrescenta listas separadas de `termos` e
+`morfologia` a cada oração da visualização, sem modificar os registros.
+Os termos aproveitam sintagmas inteiros e funções sustentadas pelas
+dependências. Sem um sintagma completo, o painel identifica o núcleo ou
+termo disponível. Expressões preposicionadas não são universalmente
+classificadas como adjuntos: a distinção entre complemento e adjunto depende
+da construção e da abordagem gramatical. O sujeito “(eu)” só é acrescentado
+como inferência quando não há sujeito expresso e a flexão regular de primeira
+pessoa do pretérito perfeito é confirmada pelo léxico. Formas ambíguas como
+“disse” e “havia” não bastam. Esse sujeito não integra o texto nem suas
+contagens. Transitividade e funções sintáticas não são classificações
+morfológicas das palavras. Períodos sem núcleo verbal identificado exibem
+a morfologia diretamente, com contador de orações igual a zero; a árvore
+completa permanece apenas na seção técnica recolhida.
 
 Essas camadas são aplicadas também às execuções já salvas: atualizar a página
 mostra a nova leitura sem executar os modelos ou modificar o banco. Os dados
@@ -196,8 +233,8 @@ LINGUA_TESTE_CONSTITUINTES_REAL=1 .venv/bin/python -m unittest discover \
   -s tests -p 'test_modelo_constituintes.py' -v
 ```
 
-Na validação das correções, a suíte do Língua (sem os testes do
-Agente Analista, que tem pendências próprias) executou 658 testes: 656 passaram
+Na validação desta apresentação, a suíte do Língua (sem os testes do
+Agente Analista, que tem pendências próprias) executou 683 testes: 681 passaram
 e dois opcionais foram pulados. O navegador Chromium também verificou a
 navegação, teclado, erros e nova tentativa, preservação do estado, segurança
 de apresentação, largura móvel e uso sem JavaScript, com respostas de análise

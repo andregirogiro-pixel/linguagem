@@ -97,6 +97,26 @@ def _sujeito_incompativel(palavra, filhos):
     return False
 
 
+def primeira_pessoa_perfeito_verificada(palavra):
+    """Confirma uma desinência inequívoca para inferir sujeito não expresso.
+
+    Uma etiqueta Person=1 do modelo, isoladamente, não resolve formas como
+    ‘disse’ ou ‘havia’. A conferência usa o léxico e a flexão regular local.
+    """
+    leitura = palavra.get("revisao", palavra)
+    morfologia = leitura.get("morfologia") or {}
+    if not all(morfologia.get(chave) == valor for chave, valor in _PASSADO.items()):
+        return False
+    tabela, aviso = _carregar_lexico()
+    if aviso:
+        return False
+    forma = _normalizar(palavra.get("texto", ""))
+    candidato = tabela.get(forma)
+    return (isinstance(candidato, str)
+            and _normalizar(candidato) == _normalizar(leitura.get("lema") or "")
+            and _primeira_pessoa_regular(forma, _normalizar(candidato)))
+
+
 def _revisao(palavra):
     if "revisao" not in palavra:
         palavra["revisao"] = {campo: deepcopy(palavra.get(campo)) for campo in _CAMPOS_REVISAO}

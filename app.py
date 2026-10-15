@@ -63,6 +63,7 @@ from hierarquia_sintatica import (
     construir_hierarquia, validar_hierarquia,
 )
 from revisao_hierarquia import preparar_revisao
+from apresentacao_segmentacao import resumo_segmentacao
 
 
 BASE = Path(__file__).resolve().parent
@@ -786,6 +787,7 @@ def create_app(config=None):
             vector_profiles=VECTOR_PROFILES,
             hierarchy_data=hierarchy_data, hierarchy_history=[dict(item) for item in hierarchy_history],
             hierarchy_visualizations={period_id: preparar_revisao(value) for period_id, value in hierarchy_data.items()},
+            segmentation_summary=resumo_segmentacao(segmented, hierarchy_data) if segmented else {},
         )
 
     @app.post("/envios/<int:record_id>/hierarquias")

@@ -5,10 +5,11 @@ sobre o JSON validado. O download original continua disponível para auditoria.
 """
 
 from analise_gramatical import revisar_palavras
+from apresentacao_segmentacao import preparar_paineis
 from visualizacao_hierarquia import preparar_visualizacao
 
 
-VERSAO_REVISAO = "1.0.0"
+VERSAO_REVISAO = "1.1.0"
 _TRANSITIVOS_DIRETOS = {
     "perceber", "notar", "afirmar", "dizer", "achar", "ver", "ouvir",
     "descobrir", "reconhecer", "entender", "saber",
@@ -64,4 +65,4 @@ def preparar_revisao(hierarquia):
         )
         if participio and auxiliar:
             oracao["tempo_composto"] = "Pretérito mais-que-perfeito composto do indicativo"
-    return vista
+    return preparar_paineis(hierarquia, vista)

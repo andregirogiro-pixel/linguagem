@@ -98,8 +98,12 @@ Veja [uso direto, regras e API HTTP](docs/segmentacao.md) e o
 [exemplo de segmentação](examples/segmentacao.json).
 
 A aba também oferece navegação expansível por **parágrafos → períodos →
-orações → constituintes → palavras**, preservando a quantidade de parágrafos
-do texto. A análise de constituintes requer a extensão local Stanza e o modelo
+orações**, preservando a quantidade de parágrafos do texto. Cada oração tem
+caixas independentes de **Análise sintática** (termos, sintagmas e funções) e
+**Análise morfológica** (palavras, classes e atributos). O parágrafo destaca
+seus períodos e mostra contagens; o total de orações indica quando ainda é
+parcial. A localização dos caracteres fica ao final da análise do período.
+A análise de constituintes requer a extensão local Stanza e o modelo
 português CINTIL, preparados explicitamente; a segmentação básica continua
 disponível sem essa extensão. Consulte a [instalação, os modelos e os limites
 da análise estrutural](docs/hierarquia_sintatica.md).

@@ -138,35 +138,75 @@ h1 {
 .period-list li:last-child { padding-bottom: 0; }
 .period-list li::marker { color: var(--muted); font-size: 14px; font-weight: 600; }
 .period-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.period-location { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.period-location { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .period-location summary, .segmentation-history summary, .preparation-history summary, .annotation-history summary, .analysis-history summary { cursor: pointer; }
 .period-location p { margin: 6px 0 0; }
 .hierarchy-help { margin: 10px 0 16px; color: var(--muted); font-size: 13px; }
-.hierarchy-overview { margin: 16px 0 8px; font-size: 14px; }
 .hierarchy-paragraphs, .hierarchy-periods, .hierarchy-clauses, .hierarchy-tree { margin: 0; padding: 0; list-style: none; }
+.hierarchy-text-group { margin-top: 24px; padding: 16px; border-radius: 12px; background: #f2f4f0; }
+.hierarchy-group-title, .hierarchy-section-title { margin: 0 0 12px; font-size: 14px; font-weight: 650; }
+.hierarchy-text-group > .hierarchy-group-title { font-size: 15px; }
 .hierarchy-paragraphs > li + li { margin-top: 16px; }
-.hierarchy-paragraph { border: 1px solid var(--line); border-radius: 10px; }
-.hierarchy-paragraph > summary { padding: 14px 16px; background: #f8faf6; border-radius: 10px; font-weight: 650; }
-.hierarchy-paragraph[open] > summary { border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; }
-.hierarchy-paragraph-text { margin: 18px 18px 12px; color: var(--muted); font-size: 14px; }
-.hierarchy-periods { padding: 0 18px 18px; }
-.hierarchy-periods > li + li { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-.hierarchy-period > summary { padding: 8px 0; }
-.hierarchy-unit-name { margin-right: 8px; color: var(--accent); font-size: 12px; font-weight: 650; }
+.hierarchy-paragraph { border: 1px solid #d5ddd1; border-radius: 9px; background: #edf2e9; }
+.hierarchy-paragraph > summary { padding: 13px 16px; font-size: 15px; font-weight: 650; }
+.hierarchy-paragraph[open] > summary { border-bottom: 1px solid #d5ddd1; }
+.hierarchy-paragraph-body { padding: 16px; }
+.hierarchy-paragraph-text, .hierarchy-period-text, .hierarchy-clause-text { padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 14px; line-height: 1.85; }
+.hierarchy-period-highlight { border-radius: 3px; color: inherit; padding: 2px 0; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.hierarchy-color-0 { background: #e3eddd; }
+.hierarchy-color-1 { background: #f6ebce; }
+.hierarchy-color-2 { background: #ebe2f0; }
+.hierarchy-color-3 { background: #e0eaf2; }
+.hierarchy-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 20px; }
+.hierarchy-paragraph-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hierarchy-stats > div { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.hierarchy-stats dt { color: var(--muted); font-size: 12px; }
+.hierarchy-stats dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.hierarchy-stats small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.hierarchy-stats small:empty { display: none; }
+.hierarchy-period-group { padding: 14px; border: 1px solid #d9ded5; border-radius: 8px; background: #f4f6f1; }
+.hierarchy-periods > li + li { margin-top: 12px; }
+.hierarchy-period { border: 1px solid var(--line); border-radius: 7px; background: #f8faf6; }
+.hierarchy-period > summary { padding: 12px 14px; font-size: 14px; }
+.hierarchy-number { margin-right: 8px; font-weight: 650; }
+.hierarchy-period[open] > summary, .hierarchy-clause[open] > summary { border-bottom: 1px solid var(--line); }
+.hierarchy-period[open] > summary > .hierarchy-preview, .hierarchy-clause[open] > summary > .hierarchy-preview { display: none; }
+.hierarchy-period-body { padding: 14px; }
 .hierarchy-label { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .hierarchy-status { margin: 12px 0; color: var(--muted); font-size: 13px; }
 .hierarchy-status[data-state="error"] { padding: 10px 12px; border-left: 3px solid #b87162; background: #fff4f1; color: #873127; }
 .hierarchy-period [data-hierarchy-result] { min-width: 0; }
-.hierarchy-clauses { margin: 14px 0 0; }
-.hierarchy-diagram-title { margin: 16px 0 8px; font-size: 14px; }
-.hierarchy-clause > .hierarchy-clauses { border-left: 2px solid var(--line); padding-left: 12px; }
+.hierarchy-clause-group { margin-top: 20px; }
 .hierarchy-clauses > li + li { margin-top: 12px; }
-.hierarchy-clause { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
-.hierarchy-clause > summary { color: var(--accent); font-size: 14px; font-weight: 650; }
-.hierarchy-clause-text { margin-top: 12px; font-size: 14px; }
+.hierarchy-clause { border: 1px solid var(--line); border-radius: 7px; background: #f0f3ed; }
+.hierarchy-clause > summary { padding: 12px 14px; font-size: 14px; }
+.hierarchy-clause-body { padding: 12px; }
+.hierarchy-clause-text + .hierarchy-clause-text { margin-top: 8px; }
+.hierarchy-clause-panels { display: grid; gap: 12px; margin-top: 14px; }
 .hierarchy-relations { margin: 10px 0; padding-left: 20px; color: var(--muted); font-size: 12px; }
-.hierarchy-syntax { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
-.hierarchy-syntax > summary { font-size: 13px; font-weight: 600; }
+.hierarchy-syntax, .hierarchy-morphology { min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.hierarchy-syntax > summary, .hierarchy-morphology > summary { padding: 12px; font-size: 14px; font-weight: 600; }
+.hierarchy-syntax > summary::after, .hierarchy-morphology > summary::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 10px; margin-right: 7px; border-radius: 50%; vertical-align: middle; }
+.hierarchy-syntax > summary::after { background: #44856c; box-shadow: 8px 0 #608bab; }
+.hierarchy-morphology > summary::after { background: #9976b0; box-shadow: 8px 0 #c19c4d; }
+.hierarchy-syntax[open] > summary, .hierarchy-morphology[open] > summary { border-bottom: 1px solid var(--line); }
+.hierarchy-panel-body { padding: 12px; }
+.hierarchy-classification { margin-bottom: 16px; padding: 12px; border: 1px solid #dbe4d6; border-radius: 5px; background: #f4f8f1; font-size: 13px; }
+.hierarchy-classification p { margin: 6px 0 0; }
+.hierarchy-analysis-rows { display: grid; gap: 8px; }
+.hierarchy-analysis-row { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 2fr); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; font-size: 13px; }
+.hierarchy-analysis-text { padding: 12px; background: #edf1e8; font-weight: 650; white-space: pre-wrap; overflow-wrap: anywhere; }
+.hierarchy-analysis-classification { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; padding: 10px 12px; overflow-wrap: anywhere; }
+.hierarchy-analysis-classification > strong { font-weight: 600; }
+.hierarchy-analysis-classification > .hierarchy-help { margin: 4px 0 0; font-size: 12px; }
+.hierarchy-analysis-classification > .hierarchy-label { margin-left: 0; }
+.hierarchy-word-body { padding: 0 12px 12px; }
+.hierarchy-word.hierarchy-morphology-word > summary { padding: 0; }
+.hierarchy-morphology-word > summary .hierarchy-analysis-text::before { content: '▸'; margin-right: 6px; color: var(--muted); }
+.hierarchy-morphology-word[open] > summary .hierarchy-analysis-text::before { content: '▾'; }
+.hierarchy-morphology-word > summary .hierarchy-analysis-classification { background: #fff; }
+.hierarchy-morphology-word[open] { border: 1px solid var(--line); border-radius: 5px; }
+.hierarchy-morphology-word[open] > summary { border-width: 0 0 1px; border-radius: 5px 5px 0 0; }
 .hierarchy-tree { margin: 10px 0 2px 6px; border-left: 2px solid var(--line); padding-left: 12px; }
 .hierarchy-tree > li + li { margin-top: 8px; }
 .hierarchy-local-tree { margin-top: 12px; }
@@ -194,10 +234,18 @@ h1 {
 .hierarchy-paragraph summary, .hierarchy-history summary { cursor: pointer; overflow-wrap: anywhere; }
 .hierarchy-paragraph summary:focus-visible, .hierarchy-form button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
 @media (max-width: 640px) {
+  .hierarchy-text-group { padding: 4px; }
   .hierarchy-paragraph > summary { padding: 12px; }
-  .hierarchy-paragraph-text { margin: 12px; }
-  .hierarchy-periods { padding: 0 12px 12px; }
-  .hierarchy-clause { padding: 8px; }
+  .hierarchy-paragraph-body, .hierarchy-clause-body, .hierarchy-panel-body { padding: 6px; }
+  .hierarchy-period-group, .hierarchy-period-body { padding: 4px; }
+  .hierarchy-paragraph-text, .hierarchy-period-text, .hierarchy-clause-text { padding: 10px; }
+  .hierarchy-paragraph-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hierarchy-stats { gap: 5px; }
+  .hierarchy-stats > div { padding: 8px; }
+  .hierarchy-stats dd { font-size: 12px; }
+  .hierarchy-analysis-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
+  .hierarchy-analysis-text, .hierarchy-analysis-classification { padding: 8px; }
+  .hierarchy-syntax > summary, .hierarchy-morphology > summary { font-size: 13px; }
   .hierarchy-tree { margin-left: 0; padding-left: 7px; }
   .hierarchy-preview { display: block; margin-left: 0; }
   .hierarchy-attributes { grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px; }
@@ -432,6 +480,7 @@ button:hover { background: #1e483d; }
   .stage-tab-name { grid-column: 1 / -1; grid-row: 2; font-size: 13px; }
   .stage-tab-status { grid-column: 2; grid-row: 1; justify-self: end; margin: 0; }
   .editor { padding: 20px; }
+  .editor.segmentation-panel { padding: 14px; }
   .unit-counts { gap: 8px; }
   .unit-counts > div { padding: 10px; }
   .unit-counts dd { font-size: 24px; }
