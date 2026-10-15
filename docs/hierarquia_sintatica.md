@@ -79,6 +79,13 @@ não são substituídos por árvores simuladas.
 
 ## Navegação e processamento
 
+Se a aba ainda mostrar o cabeçalho antigo “Período 1” na mesma linha do texto
+ou “Localização no texto de trabalho”, encerre o servidor com `Ctrl+C`,
+atualize o código e execute o aplicativo novamente. Recarregue então a página.
+A consulta aos resultados salvos preserva os dados e exibe as caixas atuais.
+O aplicativo confere mudanças nos arquivos HTML a cada consulta, sem ativar
+depuração, para não manter um template antigo após atualizar a interface.
+
 Abrir um parágrafo apenas revela seus períodos. Ao abrir um período sem
 resultado salvo, uma requisição POST solicita a análise estrutural. O servidor
 reutiliza morfologia e sintaxe da origem selecionada, ou gera essas etapas

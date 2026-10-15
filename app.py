@@ -430,6 +430,8 @@ def create_app(config=None):
     app.config.from_mapping(
         DATABASE=os.environ.get("ANALISE_DB", str(BASE / "instance" / "textos.sqlite3")),
         MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+        # O servidor local deve reler o HTML após uma atualização do projeto.
+        TEMPLATES_AUTO_RELOAD=True,
         VECTORS_AUTO_START=True,
         VECTORS_MAX_WORKERS=1,
         VECTORS_ADAPTER_FACTORY=None,

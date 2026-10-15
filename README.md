@@ -53,6 +53,12 @@ clique em **Registrar texto**. A confirmação mostra o identificador do registr
 e a data em horário de Brasília. Atualizar a confirmação não repete o envio.
 Mantenha o terminal aberto durante o uso e pressione `Ctrl+C` para encerrar.
 
+Ao atualizar o projeto, encerre o servidor com `Ctrl+C` antes de executar
+`.venv/bin/python app.py` novamente. Isso carrega as alterações do aplicativo
+e evita misturar uma página antiga com os arquivos novos da interface.
+Os arquivos HTML são conferidos a cada consulta, mesmo com o modo de
+depuração desativado; alterações no código Python exigem reiniciar o servidor.
+
 ## Navegar pelas etapas
 
 Depois de registrar um texto, use as abas **Texto**, **Preparação**,
