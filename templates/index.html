@@ -211,7 +211,10 @@
                         {% elif segmentation_view.clause_state == 'executada_com_pendencias' %}
                         <p class="segmentation-period-status">Nenhuma oração disponível neste período. A identificação tem pendências.</p>
                         {% else %}
-                        <p class="segmentation-period-status">As orações deste período ainda não estão disponíveis. Consulte o estado da identificação acima.</p>
+                        <p class="segmentation-period-status">{{ segmentation_view.clause_message }}</p>
+                        {% endif %}
+                        {% if segmentation_view.next_stage %}
+                        <p class="segmentation-period-status"><a href="#etapa-{{ segmentation_view.next_stage }}" data-stage-link>Continuar em {{ next_stage_names.get(segmentation_view.next_stage, segmentation_view.next_stage) }} <span aria-hidden="true">→</span></a></p>
                         {% endif %}
                         {% if segmentation_view.has_morphology or segmentation_view.has_syntax %}
                         <details class="segmentation-analyses">
